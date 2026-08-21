@@ -12,6 +12,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS%20%7C%20Web-lightgrey?style=for-the-badge)](#system-architecture)
 [![Security: Zero--Knowledge](https://img.shields.io/badge/Security-Zero--Knowledge%20SHA--256-green?style=for-the-badge)](#security-architecture)
+[![Download APK](https://img.shields.io/badge/Download-Android%20APK%20(v1.0.0)-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/TheOrionGD/LIfeVaultAI/releases/download/v1.0.0/app-release.apk)
+[![Release Notes](https://img.shields.io/badge/Release%20Notes-v1.0.0-9333EA?style=for-the-badge&logo=markdown&logoColor=white)](RELEASE_NOTES.md)
 
 <br/>
 

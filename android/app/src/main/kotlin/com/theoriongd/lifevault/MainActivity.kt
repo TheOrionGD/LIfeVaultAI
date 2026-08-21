@@ -1,4 +1,4 @@
-package com.example.lifevault
+package com.theoriongd.lifevault
 
 import io.flutter.embedding.android.FlutterFragmentActivity
 
