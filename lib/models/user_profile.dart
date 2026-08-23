@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/theme/accent_palette.dart';
+import '../core/utils/currency_helper.dart';
 
 class UserProfile {
   UserProfile({
@@ -137,6 +138,19 @@ class UserProfile {
     return selectedAccentIds
         .map((id) => VaultAccentPalette.getById(id).color)
         .toList();
+  }
+
+  /// Currency formatting & conversion helpers
+  String get currencySymbol => CurrencyHelper.getSymbol(currency);
+  double get currencyRate => CurrencyHelper.getRate(currency);
+
+  String formatSpend(double baseUsdAmount, {int decimals = 0, bool showCode = false}) {
+    return CurrencyHelper.format(
+      baseUsdAmount,
+      currency,
+      decimals: decimals,
+      showCode: showCode,
+    );
   }
 
   /// Calculates next level XP threshold

@@ -847,8 +847,7 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
                                       children: [
                                         _buildBalanceMetric(
                                           label: 'Vault Spend',
-                                          val:
-                                              '\$${totalSpend.toStringAsFixed(0)}',
+                                          val: widget.vaultState.formatSpend(totalSpend),
                                           color: AppColors.mint,
                                         ),
                                         _buildBalanceMetric(

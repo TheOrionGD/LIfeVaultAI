@@ -339,13 +339,18 @@ class _StackedFeatureCardDeckState extends State<StackedFeatureCardDeck>
                             width: 1,
                           ),
                         ),
-                        child: Text(
-                          item.tag.toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
-                            letterSpacing: 0.7,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            item.tag.toUpperCase(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                              letterSpacing: 0.7,
+                            ),
                           ),
                         ),
                       ),
@@ -431,12 +436,16 @@ class _StackedFeatureCardDeckState extends State<StackedFeatureCardDeck>
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(
-                                  item.buttonLabel,
-                                  style: TextStyle(
-                                    color: item.gradientColors.first,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w900,
+                                Flexible(
+                                  child: Text(
+                                    item.buttonLabel,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: item.gradientColors.first,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w900,
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: 3),

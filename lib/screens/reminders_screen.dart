@@ -263,6 +263,8 @@ class _ReminderCard extends StatelessWidget {
               children: [
                 Text(
                   reminder.documentTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
@@ -272,6 +274,8 @@ class _ReminderCard extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   '${reminder.category} • Expires ${DateFormatter.formatShort(reminder.expiryDate)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 12,
                     color: isDark ? AppColors.darkMuted : AppColors.muted,
@@ -281,19 +285,24 @@ class _ReminderCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: badgeBg,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              badgeText,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w900,
-                color: badgeTextColor,
-                letterSpacing: 0.5,
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: badgeBg,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  badgeText,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    color: badgeTextColor,
+                    letterSpacing: 0.5,
+                  ),
+                ),
               ),
             ),
           ),

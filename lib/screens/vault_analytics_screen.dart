@@ -78,7 +78,7 @@ class VaultAnalyticsScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 10),
                             Text(
-                              '\$${totalSpend.toStringAsFixed(2)}',
+                              vaultState.formatSpend(totalSpend, decimals: 2),
                               style: TextStyle(
                                 fontSize: 32,
                                 fontWeight: FontWeight.w900,
@@ -237,7 +237,7 @@ class VaultAnalyticsScreen extends StatelessWidget {
                                       ],
                                     ),
                                     Text(
-                                      '$count docs ${spend > 0 ? '• \$${spend.toStringAsFixed(2)}' : ''}',
+                                      '$count docs ${spend > 0 ? '• ${vaultState.formatSpend(spend, decimals: 2)}' : ''}',
                                       style: TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w700,

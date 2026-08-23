@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:speech_to_text/speech_recognition_result.dart';
+import 'package:speech_to_text/speech_recognition_error.dart';
 import 'gemini_ai_service.dart';
 
 typedef SpeechResultCallback = void Function(String text, bool isFinal);
@@ -16,10 +19,11 @@ class SpeechRecognitionService {
   AudioAmplitudeCallback? onAmplitude;
   ValueChanged<String>? onError;
 
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  bool _isSpeechInitialized = false;
   bool _isListening = false;
   bool _isDisposed = false;
   Timer? _amplitudeTimer;
-  Timer? _speechSimulationTimer;
   double _currentAmplitude = 0.0;
   String _accumulatedText = '';
 
@@ -29,13 +33,76 @@ class SpeechRecognitionService {
 
   static bool get isSupported => true;
 
+  /// Initializes native speech engine and checks permissions
+  Future<bool> initialize() async {
+    if (_isSpeechInitialized) return true;
+    try {
+      _isSpeechInitialized = await _speech.initialize(
+        onError: (SpeechRecognitionError error) {
+          debugPrint('Speech engine error: ${error.errorMsg}');
+          if (!_isDisposed) {
+            onError?.call(error.errorMsg);
+          }
+        },
+        onStatus: (String status) {
+          debugPrint('Speech engine status: $status');
+          if (status == 'notListening' || status == 'done') {
+            if (_isListening && !_isDisposed) {
+              // Session closed or paused
+            }
+          }
+        },
+      );
+      return _isSpeechInitialized;
+    } catch (e) {
+      debugPrint('Speech initialization note: $e');
+      return false;
+    }
+  }
+
   /// Starts real-time microphone listening & audio amplitude monitoring
-  Future<bool> startListening({String locale = 'en-US'}) async {
+  Future<bool> startListening({String locale = 'en_US'}) async {
     if (_isListening || _isDisposed) return true;
 
     _accumulatedText = '';
     _isListening = true;
     _startAmplitudeMonitoring();
+
+    try {
+      final isAvailable = await initialize();
+      if (isAvailable && _speech.isAvailable) {
+        await _speech.listen(
+          onResult: (SpeechRecognitionResult result) {
+            if (_isDisposed) return;
+            _accumulatedText = result.recognizedWords;
+            onResult?.call(_accumulatedText, result.finalResult);
+          },
+          onSoundLevelChange: (double level) {
+            if (_isDisposed) return;
+            // Normalize level (typically in dB from -10 to 10 or 0 to 10)
+            final normalized = ((level + 5) / 15).clamp(0.15, 1.0);
+            _currentAmplitude = normalized;
+            onAmplitude?.call(normalized);
+          },
+          listenOptions: stt.SpeechListenOptions(
+            listenFor: const Duration(minutes: 5),
+            pauseFor: const Duration(seconds: 4),
+            partialResults: true,
+            cancelOnError: false,
+            listenMode: stt.ListenMode.dictation,
+          ),
+        );
+      } else {
+        if (!_isDisposed) {
+          onError?.call('Microphone access or speech recognizer not ready');
+        }
+      }
+    } catch (e) {
+      debugPrint('Speech listen note: $e');
+      if (!_isDisposed) {
+        onError?.call('Could not start microphone listening: $e');
+      }
+    }
     return true;
   }
 
@@ -44,9 +111,12 @@ class SpeechRecognitionService {
     _isListening = false;
     _amplitudeTimer?.cancel();
     _amplitudeTimer = null;
-    _speechSimulationTimer?.cancel();
-    _speechSimulationTimer = null;
     _currentAmplitude = 0.0;
+    try {
+      if (_speech.isListening) {
+        await _speech.stop();
+      }
+    } catch (_) {}
     if (!_isDisposed) {
       onAmplitude?.call(0.0);
     }
@@ -126,8 +196,6 @@ class SpeechRecognitionService {
     _isDisposed = true;
     _amplitudeTimer?.cancel();
     _amplitudeTimer = null;
-    _speechSimulationTimer?.cancel();
-    _speechSimulationTimer = null;
     onResult = null;
     onAmplitude = null;
     onError = null;

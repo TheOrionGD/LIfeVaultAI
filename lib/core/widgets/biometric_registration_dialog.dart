@@ -119,6 +119,7 @@ class _BiometricRegistrationDialogState
     final accent = AppTheme.of(context).primaryAccent;
 
     return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       backgroundColor: isDark ? AppColors.darkSurface : AppColors.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       child: ConstrainedBox(

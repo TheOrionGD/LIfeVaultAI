@@ -18,7 +18,7 @@ class AppEnv {
   /// MongoDB Atlas connection string (used for zero-knowledge encrypted cloud sync)
   static const String mongoDbUri = String.fromEnvironment(
     'MONGODB_URI',
-    defaultValue: '',
+    defaultValue: 'mongodb+srv://godfreytrprof_db_user:6JjxTbgSJbzjBkv4@hellotheoriongd.rbxbuxe.mongodb.net/?appName=hellotheOrionGD',
   );
 
   /// MongoDB database / collection name

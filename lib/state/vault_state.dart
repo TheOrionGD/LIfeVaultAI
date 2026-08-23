@@ -1,4 +1,7 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 import '../models/vault_document.dart';
 import '../models/receipt_item.dart';
@@ -142,6 +145,18 @@ class VaultState extends ChangeNotifier {
       }
     }
     return total;
+  }
+
+  /// Formatted total spend reflecting user's selected currency
+  String get formattedTotalSpend => _userProfile.formatSpend(totalVaultSpend);
+
+  /// Helper to format any numerical USD amount with user's selected currency & rates
+  String formatSpend(double usdAmount, {int decimals = 0, bool showCode = false}) {
+    return _userProfile.formatSpend(
+      usdAmount,
+      decimals: decimals,
+      showCode: showCode,
+    );
   }
 
   /// Category breakdown counts
@@ -387,6 +402,11 @@ class VaultState extends ChangeNotifier {
     if (_userProfile.geminiApiKey.isEmpty && AppEnv.geminiApiKey.isNotEmpty) {
       _userProfile = _userProfile.copyWith(geminiApiKey: AppEnv.geminiApiKey);
     }
+    if (_userProfile.geminiModel.contains('1.5') ||
+        _userProfile.geminiModel.contains('2.5') ||
+        _userProfile.geminiModel.isEmpty) {
+      _userProfile = _userProfile.copyWith(geminiModel: 'gemini-3.6-flash');
+    }
     if (_userProfile.huggingFaceApiKey.isEmpty && AppEnv.huggingFaceApiKey.isNotEmpty) {
       _userProfile = _userProfile.copyWith(huggingFaceApiKey: AppEnv.huggingFaceApiKey);
     }
@@ -534,13 +554,16 @@ class VaultState extends ChangeNotifier {
       category: 'Receipts',
       issueDate: receipt.purchaseDate,
       expiryDate: receipt.warrantyExpiry,
-      amount: '\$${receipt.totalAmount.toStringAsFixed(2)}',
+      amount: formatSpend(receipt.totalAmount, decimals: 2),
       merchant: receipt.storeName,
       detail:
-          '${receipt.items.length} items | Total: \$${receipt.totalAmount.toStringAsFixed(2)}',
+          '${receipt.items.length} items | Total: ${formatSpend(receipt.totalAmount, decimals: 2)}',
       notes: receipt.notes,
       rawOcrText:
-          'Store: ${receipt.storeName}\nDate: ${receipt.purchaseDate}\nTotal: \$${receipt.totalAmount.toStringAsFixed(2)}',
+          'Store: ${receipt.storeName}\nDate: ${receipt.purchaseDate}\nTotal: ${formatSpend(receipt.totalAmount, decimals: 2)}',
+      attachmentBytesBase64: receipt.attachmentBytesBase64,
+      attachmentFileName: receipt.attachmentFileName ?? 'receipt_${receipt.id.substring(0, 8)}.jpg',
+      attachmentType: receipt.attachmentType ?? 'image/jpeg',
     );
     _documents.insert(0, doc);
     _awardXp(
@@ -576,6 +599,9 @@ class VaultState extends ChangeNotifier {
       detail: 'Audio recording (${note.formattedDuration})',
       notes: note.transcript,
       rawOcrText: note.transcript,
+      attachmentBytesBase64: note.audioBytesBase64,
+      attachmentFileName: note.audioFileName ?? '${note.title.replaceAll(" ", "_")}.wav',
+      attachmentType: note.audioMimeType ?? 'audio/wav',
     );
     _documents.insert(0, doc);
     _awardXp(
@@ -823,5 +849,18 @@ class VaultState extends ChangeNotifier {
     _chatMessages.clear();
     await _storage.clearAll();
     notifyListeners();
+  }
+
+  /// Locks vault session and cleanly exits / closes the application
+  void exitApp() {
+    lockVault();
+    try {
+      SystemNavigator.pop();
+    } catch (_) {}
+    if (!kIsWeb) {
+      try {
+        exit(0);
+      } catch (_) {}
+    }
   }
 }

@@ -1,0 +1,6 @@
+-dontwarn com.google.mlkit.**
+-keep class com.google.mlkit.** { *; }
+-dontwarn com.google_mlkit_text_recognition.**
+-keep class com.google_mlkit_text_recognition.** { *; }
+-dontwarn cs.speech_to_text.**
+-keep class cs.speech_to_text.** { *; }

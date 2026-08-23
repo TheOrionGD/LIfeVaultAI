@@ -9,10 +9,12 @@ import '../core/widgets/biometric_registration_dialog.dart';
 import '../services/cloud_sync_service.dart';
 import '../services/gemini_ai_service.dart';
 import '../state/vault_state.dart';
+import '../services/platform_audio_download_helper.dart';
 import 'vault_audit_screen.dart';
 import 'emergency_card_screen.dart';
 import 'vault_rewards_screen.dart';
 import 'vault_analytics_screen.dart';
+import 'landing_login_screen.dart';
 
 class ProfileSettingsScreen extends StatefulWidget {
   const ProfileSettingsScreen({
@@ -95,11 +97,9 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   ];
 
   static const List<String> _geminiModels = [
-    'gemini-3.7-flash',
     'gemini-3.6-flash',
-    'gemini-3.5-flash',
+    'gemini-3.7-flash',
     'gemini-flash-latest',
-    'gemini-2.5-pro',
   ];
 
   static const List<String> _commonAllergies = [
@@ -566,6 +566,29 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Close'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () async {
+              final fileName = 'lifevault_backup_${DateTime.now().millisecondsSinceEpoch}.json';
+              final result = await PlatformAudioDownloadHelper.downloadFile(
+                fileName: fileName,
+                textContent: jsonStr,
+                mimeType: 'application/json',
+              );
+              if (!mounted) return;
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    result.success
+                        ? '✓ Backup "$fileName" saved to Phone ${result.storageType}'
+                        : 'Could not download backup file',
+                  ),
+                ),
+              );
+            },
+            icon: const Icon(Icons.download_rounded, size: 16),
+            label: const Text('Download Backup File'),
           ),
           FilledButton.icon(
             onPressed: () {
@@ -2367,6 +2390,94 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                 label: 'App Build',
                 value: 'LifeVault Pro v2.4.0 (Offline First)',
                 isDark: isDark,
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // Session & Security Controls (Log Out & Exit App)
+        SoftPanel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Session & Application Controls',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Manage active session, lock local vault keys, or exit application.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? AppColors.darkMuted : AppColors.muted,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => widget.vaultState.exitApp(),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.crimson,
+                        side: const BorderSide(color: AppColors.crimson, width: 1.5),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      icon: const Icon(Icons.power_settings_new_rounded, size: 18),
+                      label: const FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          'Exit App',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        widget.vaultState.lockVault();
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          VaultFadeSlideRoute(
+                            builder: (_) => LandingLoginScreen(
+                              vaultState: widget.vaultState,
+                              onSuccess: () {},
+                            ),
+                          ),
+                          (route) => false,
+                        );
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Vault locked. You have logged out successfully.'),
+                          ),
+                        );
+                      },
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.crimson,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      icon: const Icon(Icons.lock_outline_rounded, size: 18),
+                      label: const FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          'Log Out & Lock',
+                          style: TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

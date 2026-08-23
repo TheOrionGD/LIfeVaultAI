@@ -1,9 +1,16 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
+import '../core/theme/app_theme.dart';
 import '../core/utils/date_formatter.dart';
+import '../core/utils/currency_helper.dart';
 import '../core/widgets/soft_panel.dart';
+import '../core/widgets/file_attachment_preview_dialog.dart';
+import '../core/widgets/audio_player_card.dart';
 import '../models/vault_document.dart';
 import '../state/vault_state.dart';
+import '../services/platform_audio_download_helper.dart';
+import '../utils/wav_generator.dart';
 
 class DocumentDetailScreen extends StatefulWidget {
   const DocumentDetailScreen({
@@ -463,6 +470,169 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                     ),
                   ),
                 ] else ...[
+                  // 🎵 Dedicated Audio Memo Player (if Voice Note or Audio attachment)
+                  if (_doc.category == 'Voice Notes' || _doc.isAudioAttachment) ...[
+                    AudioPlayerCard(
+                      title: _doc.title,
+                      durationSeconds: 20,
+                      audioBytesBase64: _doc.attachmentBytesBase64,
+                      fileName: _doc.attachmentFileName ?? '${_doc.title}.wav',
+                      category: 'Voice Memo',
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
+                  // 📎 Attached Original Scanned File / Photo Preview Card
+                  if (_doc.hasAttachment && !_doc.isAudioAttachment) ...[
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF19202A) : const Color(0xFFEFF3F8),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: catColor.withValues(alpha: isDark ? 0.35 : 0.25),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              if (_doc.isImageAttachment && _doc.attachmentBytesBase64 != null)
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.memory(
+                                    base64Decode(_doc.attachmentBytesBase64!),
+                                    width: 56,
+                                    height: 56,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) => Container(
+                                      width: 56,
+                                      height: 56,
+                                      color: catColor.withValues(alpha: 0.2),
+                                      child: Icon(Icons.image_outlined, color: catColor),
+                                    ),
+                                  ),
+                                )
+                              else
+                                Container(
+                                  width: 56,
+                                  height: 56,
+                                  decoration: BoxDecoration(
+                                    color: catColor.withValues(alpha: 0.18),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Icon(
+                                    _doc.isPdfAttachment
+                                        ? Icons.picture_as_pdf_rounded
+                                        : Icons.insert_drive_file_rounded,
+                                    color: catColor,
+                                    size: 28,
+                                  ),
+                                ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _doc.attachmentFileName ?? 'Attached Original Document',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      '${_doc.formattedAttachmentSize.isNotEmpty ? "${_doc.formattedAttachmentSize} • " : ""}Encrypted Original Media',
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        color: isDark ? AppColors.darkMuted : AppColors.muted,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: FilledButton.icon(
+                                  onPressed: () {
+                                    FileAttachmentPreviewDialog.show(
+                                      context,
+                                      title: _doc.title,
+                                      attachmentBytesBase64: _doc.attachmentBytesBase64,
+                                      fileName: _doc.attachmentFileName,
+                                      mimeType: _doc.attachmentType,
+                                      rawOcrText: _doc.rawOcrText,
+                                    );
+                                  },
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: AppTheme.of(context).primaryAccent,
+                                    foregroundColor: isDark ? AppColors.ink : Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 10),
+                                  ),
+                                  icon: const Icon(Icons.fullscreen_rounded, size: 18),
+                                  label: const Text('In-App Preview'),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              OutlinedButton.icon(
+                                onPressed: () async {
+                                  final fileName = _doc.attachmentFileName ??
+                                      (_doc.isAudioAttachment
+                                          ? '${_doc.title.replaceAll(" ", "_")}.wav'
+                                          : '${_doc.title.replaceAll(" ", "_")}.pdf');
+
+                                  String? b64 = _doc.attachmentBytesBase64;
+                                  if ((b64 == null || b64.isEmpty) && _doc.isAudioAttachment) {
+                                    b64 = WavGenerator.generateWavBase64(
+                                      durationSeconds: 20.0,
+                                      spokenTextHint: _doc.title,
+                                    );
+                                  }
+
+                                  final textContent = 'LifeVault Document: ${_doc.title}\nCategory: ${_doc.category}\nDetails: ${_doc.detail}\nNotes: ${_doc.notes}';
+
+                                  final result = await PlatformAudioDownloadHelper.downloadFile(
+                                    fileName: fileName,
+                                    base64Data: b64,
+                                    textContent: textContent,
+                                    mimeType: _doc.attachmentType ?? (_doc.isAudioAttachment ? 'audio/wav' : 'application/pdf'),
+                                  );
+
+                                  if (!mounted) return;
+
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        result.success
+                                            ? '✓ Saved "$fileName" to Phone ${result.storageType}'
+                                            : 'Could not download "$fileName"',
+                                      ),
+                                    ),
+                                  );
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                                ),
+                                icon: const Icon(Icons.download_rounded, size: 18),
+                                label: const Text('Download'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
                   // Document Details Card
                   SoftPanel(
                     child: Column(
@@ -495,7 +665,10 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                         if (_doc.amount != null && _doc.amount!.isNotEmpty)
                           _DetailRow(
                             label: 'Amount',
-                            value: _doc.amount!,
+                            value: CurrencyHelper.formatDocumentAmount(
+                              _doc.amount,
+                              widget.vaultState.userProfile.currency,
+                            ),
                           ),
                         if (_doc.issueDate != null)
                           _DetailRow(
@@ -509,15 +682,17 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                           ),
                         if (_doc.notes.isNotEmpty)
                           _DetailRow(
-                            label: 'Notes',
+                            label: _doc.category == 'Voice Notes'
+                                ? 'Transcript'
+                                : 'Notes',
                             value: _doc.notes,
                           ),
                       ],
                     ),
                   ),
 
-                  // Raw OCR Text section (if available)
-                  if (_doc.rawOcrText.isNotEmpty) ...[
+                  // Raw OCR Text section (if available and not a Voice Note)
+                  if (_doc.rawOcrText.isNotEmpty && _doc.category != 'Voice Notes') ...[
                     const SizedBox(height: 20),
                     SoftPanel(
                       child: Column(
@@ -575,10 +750,26 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                     children: [
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: () {
+                          onPressed: () async {
+                            final fileName = _doc.attachmentFileName ?? '${_doc.title.replaceAll(" ", "_")}.txt';
+                            final shareText = 'LifeVault Vault Record: "${_doc.title}"\nCategory: ${_doc.category}\nIssue Date: ${_doc.issueDate != null ? DateFormatter.formatFull(_doc.issueDate!) : "N/A"}\nDetails: ${_doc.detail}\nNotes: ${_doc.notes}\nOCR Text: ${_doc.rawOcrText}';
+
+                            final success = await PlatformAudioDownloadHelper.shareContent(
+                              title: 'LifeVault Record: ${_doc.title}',
+                              text: shareText,
+                              base64Data: _doc.attachmentBytesBase64,
+                              fileName: fileName,
+                            );
+
+                            if (!mounted) return;
+
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text('Exported "${_doc.title}" details'),
+                                content: Text(
+                                  success
+                                      ? '✓ Record details shared / copied to clipboard'
+                                      : 'Could not share record details',
+                                ),
                               ),
                             );
                           },

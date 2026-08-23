@@ -226,42 +226,75 @@ class UserProfilePopover {
 
             const SizedBox(height: 18),
 
-            // Prominent Logout Button
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: FilledButton.icon(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  // Securely lock the vault and return to landing login screen
-                  vaultState.lockVault();
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    VaultFadeSlideRoute(
-                      builder: (_) => LandingLoginScreen(
-                        vaultState: vaultState,
-                        onSuccess: () {},
+            // Action Buttons: Log Out & Exit App
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 48,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        vaultState.exitApp();
+                      },
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.crimson,
+                        side: const BorderSide(color: AppColors.crimson, width: 1.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      icon: const Icon(Icons.power_settings_new_rounded, size: 18),
+                      label: const FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          'Exit App',
+                          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                        ),
                       ),
                     ),
-                    (route) => false,
-                  );
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Vault locked. You have logged out successfully.'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SizedBox(
+                    height: 48,
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        // Securely lock the vault and return to landing login screen
+                        vaultState.lockVault();
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          VaultFadeSlideRoute(
+                            builder: (_) => LandingLoginScreen(
+                              vaultState: vaultState,
+                              onSuccess: () {},
+                            ),
+                          ),
+                          (route) => false,
+                        );
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Vault locked. You have logged out successfully.'),
+                          ),
+                        );
+                      },
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.crimson,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      icon: const Icon(Icons.lock_outline_rounded, size: 18),
+                      label: const FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          'Log Out',
+                          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
+                        ),
+                      ),
                     ),
-                  );
-                },
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.crimson,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
                 ),
-                icon: const Icon(Icons.lock_outline_rounded, size: 18),
-                label: const Text(
-                  'Log Out & Lock Vault',
-                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
-                ),
-              ),
+              ],
             ),
           ],
         ),

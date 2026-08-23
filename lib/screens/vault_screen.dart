@@ -260,7 +260,7 @@ class _VaultScreenState extends State<VaultScreen> {
                   physics: const NeverScrollableScrollPhysics(),
                   gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                     maxCrossAxisExtent: 300,
-                    mainAxisExtent: 175,
+                    mainAxisExtent: 185,
                     crossAxisSpacing: 14,
                     mainAxisSpacing: 14,
                   ),
@@ -433,6 +433,8 @@ class _DocumentCardList extends StatelessWidget {
               children: [
                 Text(
                   document.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontWeight: FontWeight.w900,
                     fontSize: 15,
@@ -442,6 +444,8 @@ class _DocumentCardList extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   '${document.category} • ${DateFormatter.formatRelativeTime(document.createdAt)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 12,
                     color: isDark ? AppColors.darkMuted : AppColors.muted,
@@ -451,26 +455,30 @@ class _DocumentCardList extends StatelessWidget {
             ),
           ),
           if (document.expiryDate != null)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: document.isExpired
-                    ? AppColors.crimson.withValues(alpha: 0.15)
-                    : (document.urgency == DocumentUrgency.critical
-                        ? AppColors.coral.withValues(alpha: 0.15)
-                        : AppColors.mint.withValues(alpha: 0.15)),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                DateFormatter.formatExpiryRelative(document.expiryDate!),
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
+            Flexible(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
                   color: document.isExpired
-                      ? AppColors.crimson
+                      ? AppColors.crimson.withValues(alpha: 0.15)
                       : (document.urgency == DocumentUrgency.critical
-                          ? AppColors.coral
-                          : AppColors.mint),
+                          ? AppColors.coral.withValues(alpha: 0.15)
+                          : AppColors.mint.withValues(alpha: 0.15)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  DateFormatter.formatExpiryRelative(document.expiryDate!),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: document.isExpired
+                        ? AppColors.crimson
+                        : (document.urgency == DocumentUrgency.critical
+                            ? AppColors.coral
+                            : AppColors.mint),
+                  ),
                 ),
               ),
             ),

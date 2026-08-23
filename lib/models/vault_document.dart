@@ -16,6 +16,10 @@ class VaultDocument {
     this.notes = '',
     this.tags = const [],
     this.rawOcrText = '',
+    this.attachmentBytesBase64,
+    this.attachmentFileName,
+    this.attachmentType,
+    this.attachmentSize,
     DateTime? createdAt,
     DateTime? updatedAt,
     this.isFavorite = false,
@@ -34,9 +38,55 @@ class VaultDocument {
   final String notes;
   final List<String> tags;
   final String rawOcrText;
+  final String? attachmentBytesBase64;
+  final String? attachmentFileName;
+  final String? attachmentType;
+  final int? attachmentSize;
   final DateTime createdAt;
   final DateTime updatedAt;
   final bool isFavorite;
+
+  bool get hasAttachment =>
+      attachmentBytesBase64 != null && attachmentBytesBase64!.trim().isNotEmpty;
+
+  bool get isImageAttachment {
+    if (!hasAttachment) return false;
+    final name = (attachmentFileName ?? '').toLowerCase();
+    final type = (attachmentType ?? '').toLowerCase();
+    return type.startsWith('image/') ||
+        name.endsWith('.jpg') ||
+        name.endsWith('.jpeg') ||
+        name.endsWith('.png') ||
+        name.endsWith('.webp') ||
+        name.endsWith('.gif');
+  }
+
+  bool get isAudioAttachment {
+    if (!hasAttachment) return false;
+    final name = (attachmentFileName ?? '').toLowerCase();
+    final type = (attachmentType ?? '').toLowerCase();
+    return type.startsWith('audio/') ||
+        name.endsWith('.wav') ||
+        name.endsWith('.mp3') ||
+        name.endsWith('.m4a') ||
+        name.endsWith('.aac') ||
+        name.endsWith('.ogg');
+  }
+
+  bool get isPdfAttachment {
+    if (!hasAttachment) return false;
+    final name = (attachmentFileName ?? '').toLowerCase();
+    final type = (attachmentType ?? '').toLowerCase();
+    return type.contains('pdf') || name.endsWith('.pdf');
+  }
+
+  String get formattedAttachmentSize {
+    final size = attachmentSize ?? (attachmentBytesBase64 != null ? (attachmentBytesBase64!.length * 3 / 4).round() : 0);
+    if (size <= 0) return '';
+    if (size < 1024) return '$size B';
+    if (size < 1024 * 1024) return '${(size / 1024).toStringAsFixed(1)} KB';
+    return '${(size / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
 
   int? get expiresIn =>
       expiryDate != null ? DateFormatter.daysRemaining(expiryDate!) : null;
@@ -64,6 +114,10 @@ class VaultDocument {
     String? notes,
     List<String>? tags,
     String? rawOcrText,
+    String? attachmentBytesBase64,
+    String? attachmentFileName,
+    String? attachmentType,
+    int? attachmentSize,
     bool? isFavorite,
   }) {
     return VaultDocument(
@@ -79,6 +133,11 @@ class VaultDocument {
       notes: notes ?? this.notes,
       tags: tags ?? this.tags,
       rawOcrText: rawOcrText ?? this.rawOcrText,
+      attachmentBytesBase64:
+          attachmentBytesBase64 ?? this.attachmentBytesBase64,
+      attachmentFileName: attachmentFileName ?? this.attachmentFileName,
+      attachmentType: attachmentType ?? this.attachmentType,
+      attachmentSize: attachmentSize ?? this.attachmentSize,
       createdAt: createdAt,
       updatedAt: DateTime.now(),
       isFavorite: isFavorite ?? this.isFavorite,
@@ -99,6 +158,10 @@ class VaultDocument {
       'notes': notes,
       'tags': tags,
       'rawOcrText': rawOcrText,
+      'attachmentBytesBase64': attachmentBytesBase64,
+      'attachmentFileName': attachmentFileName,
+      'attachmentType': attachmentType,
+      'attachmentSize': attachmentSize,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
       'isFavorite': isFavorite,
@@ -124,6 +187,10 @@ class VaultDocument {
       tags: (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
           const [],
       rawOcrText: json['rawOcrText'] as String? ?? '',
+      attachmentBytesBase64: json['attachmentBytesBase64'] as String?,
+      attachmentFileName: json['attachmentFileName'] as String?,
+      attachmentType: json['attachmentType'] as String?,
+      attachmentSize: json['attachmentSize'] as int?,
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'] as String) ?? DateTime.now()
           : DateTime.now(),

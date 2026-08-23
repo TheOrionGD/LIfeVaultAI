@@ -12,11 +12,9 @@ import '../core/utils/date_formatter.dart';
 class GeminiAiService {
   /// Active and supported Google Generative AI Foundation Models (prioritized by capability & speed)
   static const List<String> activeModels = [
-    'gemini-3.7-flash',
     'gemini-3.6-flash',
-    'gemini-3.5-flash',
+    'gemini-3.7-flash',
     'gemini-flash-latest',
-    'gemini-2.5-pro',
   ];
 
   /// Processes a user question against the user's real saved documents
@@ -524,15 +522,23 @@ Output strictly valid JSON with no surrounding markdown code blocks or commentar
             final content = candidates[0]['content'] as Map<String, dynamic>?;
             final parts = content?['parts'] as List<dynamic>?;
             if (parts != null && parts.isNotEmpty) {
-              String text = parts[0]['text'] as String;
+              final textBuffer = StringBuffer();
+              for (final part in parts) {
+                if (part is Map<String, dynamic> && part.containsKey('text')) {
+                  textBuffer.write(part['text'] as String? ?? '');
+                }
+              }
+              String text = textBuffer.toString().trim();
               text = text.replaceAll('```json', '').replaceAll('```', '').trim();
               final jsonStartIndex = text.indexOf('{');
               final jsonEndIndex = text.lastIndexOf('}');
               if (jsonStartIndex != -1 && jsonEndIndex != -1) {
                 text = text.substring(jsonStartIndex, jsonEndIndex + 1);
               }
-              final parsed = jsonDecode(text) as Map<String, dynamic>;
-              return parsed;
+              try {
+                final parsed = jsonDecode(text) as Map<String, dynamic>;
+                return parsed;
+              } catch (_) {}
             }
           }
         }
@@ -624,12 +630,20 @@ Output strictly valid JSON with no surrounding markdown or explanation.
               final content = candidates[0]['content'] as Map<String, dynamic>?;
               final parts = content?['parts'] as List<dynamic>?;
               if (parts != null && parts.isNotEmpty) {
-                String raw = parts[0]['text'] as String;
+                final textBuffer = StringBuffer();
+                for (final part in parts) {
+                  if (part is Map<String, dynamic> && part.containsKey('text')) {
+                    textBuffer.write(part['text'] as String? ?? '');
+                  }
+                }
+                String raw = textBuffer.toString().trim();
                 raw = raw.replaceAll('```json', '').replaceAll('```', '').trim();
                 final sIdx = raw.indexOf('{');
                 final eIdx = raw.lastIndexOf('}');
                 if (sIdx != -1 && eIdx != -1) {
-                  return jsonDecode(raw.substring(sIdx, eIdx + 1)) as Map<String, dynamic>;
+                  try {
+                    return jsonDecode(raw.substring(sIdx, eIdx + 1)) as Map<String, dynamic>;
+                  } catch (_) {}
                 }
               }
             }
@@ -787,8 +801,14 @@ Output strictly valid JSON with no surrounding markdown or explanation.
             final content = candidates[0]['content'] as Map<String, dynamic>?;
             final parts = content?['parts'] as List<dynamic>?;
             if (parts != null && parts.isNotEmpty) {
-              final text = (parts[0]['text'] as String?)?.trim();
-              if (text != null && text.isNotEmpty) {
+              final textBuffer = StringBuffer();
+              for (final part in parts) {
+                if (part is Map<String, dynamic> && part.containsKey('text')) {
+                  textBuffer.write(part['text'] as String? ?? '');
+                }
+              }
+              final text = textBuffer.toString().trim();
+              if (text.isNotEmpty) {
                 return text;
               }
             }

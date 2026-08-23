@@ -147,19 +147,22 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
 
                 const SizedBox(height: 14),
 
-                // Filter chips
-                Row(
-                  children: ['All', 'Favorites', 'Expiring Soon'].map((f) {
-                    final isSelected = _filter == f;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: FilterChip(
-                        label: Text(f),
-                        selected: isSelected,
-                        onSelected: (_) => setState(() => _filter = f),
-                      ),
-                    );
-                  }).toList(),
+                // Filter chips (horizontally scrollable to eliminate mobile overflow)
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: ['All', 'Favorites', 'Expiring Soon'].map((f) {
+                      final isSelected = _filter == f;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: FilterChip(
+                          label: Text(f),
+                          selected: isSelected,
+                          onSelected: (_) => setState(() => _filter = f),
+                        ),
+                      );
+                    }).toList(),
+                  ),
                 ),
 
                 const SizedBox(height: 20),
@@ -228,6 +231,8 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                                 children: [
                                   Text(
                                     doc.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                       fontWeight: FontWeight.w900,
                                       fontSize: 15,

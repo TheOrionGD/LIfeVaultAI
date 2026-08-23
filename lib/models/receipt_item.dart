@@ -35,6 +35,9 @@ class ReceiptRecord {
     this.warrantyMonths = 0,
     this.category = 'Receipts',
     this.notes = '',
+    this.attachmentBytesBase64,
+    this.attachmentFileName,
+    this.attachmentType,
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
 
@@ -46,7 +49,13 @@ class ReceiptRecord {
   final int warrantyMonths;
   final String category;
   final String notes;
+  final String? attachmentBytesBase64;
+  final String? attachmentFileName;
+  final String? attachmentType;
   final DateTime createdAt;
+
+  bool get hasAttachment =>
+      attachmentBytesBase64 != null && attachmentBytesBase64!.trim().isNotEmpty;
 
   double get subtotal =>
       items.fold(0.0, (sum, item) => sum + item.totalPrice);
@@ -70,6 +79,9 @@ class ReceiptRecord {
         'warrantyMonths': warrantyMonths,
         'category': category,
         'notes': notes,
+        'attachmentBytesBase64': attachmentBytesBase64,
+        'attachmentFileName': attachmentFileName,
+        'attachmentType': attachmentType,
         'createdAt': createdAt.toIso8601String(),
       };
 
@@ -85,6 +97,9 @@ class ReceiptRecord {
         warrantyMonths: (json['warrantyMonths'] as num?)?.toInt() ?? 0,
         category: json['category'] as String? ?? 'Receipts',
         notes: json['notes'] as String? ?? '',
+        attachmentBytesBase64: json['attachmentBytesBase64'] as String?,
+        attachmentFileName: json['attachmentFileName'] as String?,
+        attachmentType: json['attachmentType'] as String?,
         createdAt: json['createdAt'] != null
             ? DateTime.parse(json['createdAt'] as String)
             : DateTime.now(),

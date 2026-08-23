@@ -522,14 +522,17 @@ class _MasterAuthDialogState extends State<MasterAuthDialog>
               : null,
         ),
         child: Center(
-          child: Text(
-            title,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-              color: isSelected
-                  ? (isDark ? Colors.white : AppColors.ink)
-                  : (isDark ? AppColors.darkMuted : AppColors.muted),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              title,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                color: isSelected
+                    ? (isDark ? Colors.white : AppColors.ink)
+                    : (isDark ? AppColors.darkMuted : AppColors.muted),
+              ),
             ),
           ),
         ),
@@ -763,8 +766,10 @@ class _MasterAuthDialogState extends State<MasterAuthDialog>
         const SizedBox(height: 16),
 
         // Biometric Sensor Selection Chips
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          alignment: WrapAlignment.center,
           children: [
             if (hasFinger)
               ChoiceChip(
@@ -778,7 +783,6 @@ class _MasterAuthDialogState extends State<MasterAuthDialog>
                 avatar: const Icon(Icons.fingerprint_rounded, size: 16),
                 label: const Text('Fingerprint'),
               ),
-            const SizedBox(width: 10),
             if (hasFace)
               ChoiceChip(
                 selected: _selectedBioType == 'face',

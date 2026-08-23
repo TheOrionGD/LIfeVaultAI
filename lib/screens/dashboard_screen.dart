@@ -155,7 +155,7 @@ class DashboardScreen extends StatelessWidget {
                     _HubCard(
                       icon: Icons.query_stats_rounded,
                       title: 'Vault Spend',
-                      value: '\$${totalSpend.toStringAsFixed(0)}',
+                      value: vaultState.formatSpend(totalSpend),
                       color: AppColors.mint,
                       onTap: () {
                         Navigator.push(
@@ -239,13 +239,16 @@ class DashboardScreen extends StatelessWidget {
                           ],
                         ),
                       ),
-                      FilledButton.tonal(
-                        onPressed: () => onNavigateToTab(2), // Reminders tab
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.coral,
-                          foregroundColor: AppColors.ink,
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: FilledButton.tonal(
+                          onPressed: () => onNavigateToTab(2), // Reminders tab
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.coral,
+                            foregroundColor: AppColors.ink,
+                          ),
+                          child: const Text('View Alerts'),
                         ),
-                        child: const Text('View Alerts'),
                       ),
                     ],
                   ),

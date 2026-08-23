@@ -1,9 +1,13 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme.dart';
 import '../core/utils/date_formatter.dart';
 import '../core/widgets/soft_panel.dart';
+import '../core/widgets/file_attachment_preview_dialog.dart';
 import '../models/receipt_item.dart';
 import '../state/vault_state.dart';
 
@@ -27,11 +31,46 @@ class _ReceiptStorageScreenState extends State<ReceiptStorageScreen> {
   DateTime _purchaseDate = DateTime.now();
   int _warrantyMonths = 12;
 
+  Uint8List? _receiptImageBytes;
+  String? _receiptFileName;
+
   final List<ReceiptLineItem> _items = [];
 
   final _itemNameController = TextEditingController();
   final _itemQtyController = TextEditingController(text: '1');
   final _itemPriceController = TextEditingController();
+
+  Future<void> _pickReceiptImage() async {
+    try {
+      final picker = ImagePicker();
+      final photo = await picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
+      if (photo != null) {
+        final bytes = await photo.readAsBytes();
+        setState(() {
+          _receiptImageBytes = bytes;
+          _receiptFileName = photo.name;
+        });
+      }
+    } catch (e) {
+      debugPrint('Receipt image pick error: $e');
+    }
+  }
+
+  Future<void> _captureReceiptCamera() async {
+    try {
+      final picker = ImagePicker();
+      final photo = await picker.pickImage(source: ImageSource.camera, imageQuality: 90);
+      if (photo != null) {
+        final bytes = await photo.readAsBytes();
+        setState(() {
+          _receiptImageBytes = bytes;
+          _receiptFileName = 'receipt_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        });
+      }
+    } catch (e) {
+      debugPrint('Receipt camera error: $e');
+    }
+  }
 
   @override
   void dispose() {
@@ -112,18 +151,24 @@ class _ReceiptStorageScreenState extends State<ReceiptStorageScreen> {
       tax: tax,
       warrantyMonths: _warrantyMonths,
       notes: _notesController.text.trim(),
+      attachmentBytesBase64: _receiptImageBytes != null
+          ? base64Encode(_receiptImageBytes!)
+          : null,
+      attachmentFileName: _receiptFileName ?? 'receipt_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      attachmentType: 'image/jpeg',
     );
 
     widget.vaultState.addReceipt(receipt);
     Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Receipt for "$store" saved to vault')),
+      SnackBar(content: Text('✓ Receipt for "$store" encrypted and saved to vault')),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accent = AppTheme.of(context).primaryAccent;
     final subtotal = _items.fold(0.0, (sum, i) => sum + i.totalPrice);
     final tax = double.tryParse(_taxController.text.trim()) ?? 0.0;
     final total = subtotal + tax;
@@ -137,6 +182,18 @@ class _ReceiptStorageScreenState extends State<ReceiptStorageScreen> {
           tooltip: 'Back',
         ),
         title: const Text('Add Receipt'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.camera_alt_outlined),
+            tooltip: 'Snap Receipt Photo',
+            onPressed: _captureReceiptCamera,
+          ),
+          IconButton(
+            icon: const Icon(Icons.upload_file_rounded),
+            tooltip: 'Upload Receipt Image',
+            onPressed: _pickReceiptImage,
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 36),
@@ -146,6 +203,114 @@ class _ReceiptStorageScreenState extends State<ReceiptStorageScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // 📷 Receipt Photo Capture / Upload Bar & Preview
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: _captureReceiptCamera,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: accent,
+                          foregroundColor: isDark ? AppColors.ink : Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        icon: const Icon(Icons.camera_alt_rounded, size: 18),
+                        label: const FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text('Snap Receipt'),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _pickReceiptImage,
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        icon: const Icon(Icons.photo_library_outlined, size: 18),
+                        label: const FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text('Upload Image'),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                if (_receiptImageBytes != null) ...[
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1A222E) : const Color(0xFFEFF3F8),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: accent.withValues(alpha: isDark ? 0.35 : 0.25),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.memory(
+                            _receiptImageBytes!,
+                            width: 44,
+                            height: 44,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _receiptFileName ?? 'Attached Receipt Image',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                              ),
+                              Text(
+                                '${(_receiptImageBytes!.length / 1024).toStringAsFixed(1)} KB • Encrypted Payload',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isDark ? AppColors.darkMuted : AppColors.muted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.fullscreen_rounded, size: 22),
+                          tooltip: 'In-App Fullscreen Preview',
+                          onPressed: () {
+                            FileAttachmentPreviewDialog.show(
+                              context,
+                              title: _storeController.text.isNotEmpty
+                                  ? '${_storeController.text} Receipt'
+                                  : 'Receipt Photo',
+                              attachmentBytes: _receiptImageBytes,
+                              fileName: _receiptFileName,
+                              mimeType: 'image/jpeg',
+                            );
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded, size: 20, color: AppColors.crimson),
+                          tooltip: 'Remove Image',
+                          onPressed: () => setState(() {
+                            _receiptImageBytes = null;
+                            _receiptFileName = null;
+                          }),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 16),
+
                 // Top Store & Date Card
                 SoftPanel(
                   child: Column(
@@ -174,8 +339,11 @@ class _ReceiptStorageScreenState extends State<ReceiptStorageScreen> {
                             child: OutlinedButton.icon(
                               onPressed: _pickDate,
                               icon: const Icon(Icons.calendar_today_outlined, size: 16),
-                              label: Text(
-                                'Date: ${DateFormatter.formatShort(_purchaseDate)}',
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  'Date: ${DateFormatter.formatShort(_purchaseDate)}',
+                                ),
                               ),
                             ),
                           ),
@@ -223,7 +391,7 @@ class _ReceiptStorageScreenState extends State<ReceiptStorageScreen> {
                       Row(
                         children: [
                           Expanded(
-                            flex: 3,
+                            flex: 5,
                             child: TextField(
                               controller: _itemNameController,
                               decoration: const InputDecoration(
@@ -234,7 +402,7 @@ class _ReceiptStorageScreenState extends State<ReceiptStorageScreen> {
                           ),
                           const SizedBox(width: 8),
                           Expanded(
-                            flex: 1,
+                            flex: 2,
                             child: TextField(
                               controller: _itemQtyController,
                               keyboardType: TextInputType.number,
@@ -245,13 +413,13 @@ class _ReceiptStorageScreenState extends State<ReceiptStorageScreen> {
                           ),
                           const SizedBox(width: 8),
                           Expanded(
-                            flex: 2,
+                            flex: 3,
                             child: TextField(
                               controller: _itemPriceController,
                               keyboardType:
                                   const TextInputType.numberWithOptions(decimal: true),
-                              decoration: const InputDecoration(
-                                labelText: 'Unit (\$)',
+                              decoration: InputDecoration(
+                                labelText: 'Unit (${widget.vaultState.userProfile.currencySymbol})',
                                 hintText: '0.00',
                               ),
                             ),
@@ -288,7 +456,7 @@ class _ReceiptStorageScreenState extends State<ReceiptStorageScreen> {
                                 style: const TextStyle(fontWeight: FontWeight.w700),
                               ),
                               subtitle: Text(
-                                '${item.quantity} × \$${item.unitPrice.toStringAsFixed(2)}',
+                                '${item.quantity} × ${widget.vaultState.formatSpend(item.unitPrice, decimals: 2)}',
                                 style: TextStyle(
                                   color: isDark
                                       ? AppColors.darkMuted
@@ -300,7 +468,7 @@ class _ReceiptStorageScreenState extends State<ReceiptStorageScreen> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
-                                    '\$${item.totalPrice.toStringAsFixed(2)}',
+                                    widget.vaultState.formatSpend(item.totalPrice, decimals: 2),
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w900,
                                       fontSize: 15,
@@ -339,7 +507,7 @@ class _ReceiptStorageScreenState extends State<ReceiptStorageScreen> {
                             style: TextStyle(fontWeight: FontWeight.w600),
                           ),
                           Text(
-                            '\$${subtotal.toStringAsFixed(2)}',
+                            widget.vaultState.formatSpend(subtotal, decimals: 2),
                             style: const TextStyle(fontWeight: FontWeight.w800),
                           ),
                         ],
@@ -384,7 +552,7 @@ class _ReceiptStorageScreenState extends State<ReceiptStorageScreen> {
                             ),
                           ),
                           Text(
-                            '\$${total.toStringAsFixed(2)}',
+                            widget.vaultState.formatSpend(total, decimals: 2),
                             style: const TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.w900,

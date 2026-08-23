@@ -1,3 +1,6 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:intl/intl.dart';
 
 class OcrExtractionResult {
@@ -27,6 +30,30 @@ class OcrExtractionResult {
 }
 
 class OcrEngineService {
+  /// On-Device ML Kit OCR Text Extraction (Works 100% offline with zero latency on mobile)
+  static Future<String> recognizeTextOnDevice(Uint8List imageBytes) async {
+    try {
+      final tempDir = await Directory.systemTemp.createTemp('lifevault_ocr_');
+      final tempFile = File('${tempDir.path}/scan_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      await tempFile.writeAsBytes(imageBytes);
+
+      final inputImage = InputImage.fromFilePath(tempFile.path);
+      final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
+      final RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
+      await textRecognizer.close();
+
+      try {
+        if (await tempFile.exists()) await tempFile.delete();
+        if (await tempDir.exists()) await tempDir.delete();
+      } catch (_) {}
+
+      return recognizedText.text.trim();
+    } catch (e) {
+      debugPrint('On-Device ML Kit OCR note: $e');
+      return '';
+    }
+  }
+
   /// Extracts structured fields from raw OCR text using regex and heuristics
   static OcrExtractionResult extractFields(String text) {
     if (text.trim().isEmpty) {

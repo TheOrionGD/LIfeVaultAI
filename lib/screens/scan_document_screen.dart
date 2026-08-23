@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -11,10 +12,12 @@ import '../core/theme/app_theme.dart';
 import '../core/utils/date_formatter.dart';
 import '../core/widgets/soft_panel.dart';
 import '../core/widgets/laser_scan_overlay.dart';
+import '../core/widgets/file_attachment_preview_dialog.dart';
 import '../models/vault_document.dart';
 import '../services/ocr_engine_service.dart';
 import '../services/gemini_ai_service.dart';
 import '../state/vault_state.dart';
+import '../services/platform_audio_download_helper.dart';
 
 class ScanDocumentScreen extends StatefulWidget {
   const ScanDocumentScreen({super.key, required this.vaultState});
@@ -117,41 +120,64 @@ class _ScanDocumentScreenState extends State<ScanDocumentScreen> {
 
     final profile = widget.vaultState.userProfile;
     Map<String, dynamic>? visionResult;
-
-    // 1. Multimodal Vision OCR via Gemini AI
-    try {
-      visionResult = await GeminiAiService.extractDocumentFromImage(
-        apiKey: profile.geminiApiKey,
-        model: profile.geminiModel,
-        imageBytes: bytes,
-      );
-    } catch (_) {}
-
-    if (!mounted) return;
-
     String extractedRawText = '';
-    String title = 'Scanned Document';
-    String category = 'Identity';
-    DateTime? parsedExpiry;
-    DateTime? parsedIssue;
-    String? docNum;
-    String? amount;
-    String? notes;
+    bool usedOnDeviceOcr = false;
 
-    if (visionResult != null) {
-      extractedRawText = visionResult['rawText'] as String? ?? '';
-      title = visionResult['title'] as String? ?? (fileName.isNotEmpty ? fileName.replaceAll(RegExp(r'\.[a-zA-Z0-9]+$'), '') : 'Scanned Document');
-      category = visionResult['category'] as String? ?? 'Identity';
-      docNum = visionResult['documentNumber'] as String?;
-      amount = visionResult['amount'] as String?;
-      notes = visionResult['notes'] as String? ?? '';
-      final expiryStr = visionResult['expiryDate'] as String?;
-      final issueStr = visionResult['issueDate'] as String?;
+    try {
+      // 1. Multimodal Vision OCR via Gemini AI
+      try {
+        visionResult = await GeminiAiService.extractDocumentFromImage(
+          apiKey: profile.geminiApiKey,
+          model: profile.geminiModel,
+          imageBytes: bytes,
+        );
+        if (visionResult != null) {
+          extractedRawText = visionResult['rawText'] as String? ?? '';
+        }
+      } catch (e) {
+        debugPrint('Gemini vision OCR note: $e');
+      }
 
-      if (expiryStr != null && expiryStr.isNotEmpty) parsedExpiry = DateTime.tryParse(expiryStr);
-      if (issueStr != null && issueStr.isNotEmpty) parsedIssue = DateTime.tryParse(issueStr);
+      // 2. On-Device Google ML Kit OCR Fallback (works offline)
+      if (extractedRawText.trim().isEmpty) {
+        try {
+          final onDeviceText = await OcrEngineService.recognizeTextOnDevice(bytes);
+          if (onDeviceText.trim().isNotEmpty) {
+            extractedRawText = onDeviceText.trim();
+            usedOnDeviceOcr = true;
+          }
+        } catch (e) {
+          debugPrint('On-device OCR note: $e');
+        }
+      }
 
-      // Supplement with client regex if any fields are missing
+      if (!mounted) return;
+
+      String title = 'Scanned Document';
+      String category = 'Identity';
+      DateTime? parsedExpiry;
+      DateTime? parsedIssue;
+      String? docNum;
+      String? amount;
+      String? notes;
+
+      if (visionResult != null) {
+        title = visionResult['title'] as String? ??
+            (fileName.isNotEmpty
+                ? fileName.replaceAll(RegExp(r'\.[a-zA-Z0-9]+$'), '')
+                : 'Scanned Document');
+        category = visionResult['category'] as String? ?? 'Identity';
+        docNum = visionResult['documentNumber'] as String?;
+        amount = visionResult['amount'] as String?;
+        notes = visionResult['notes'] as String? ?? '';
+        final expiryStr = visionResult['expiryDate'] as String?;
+        final issueStr = visionResult['issueDate'] as String?;
+
+        if (expiryStr != null && expiryStr.isNotEmpty) parsedExpiry = DateTime.tryParse(expiryStr);
+        if (issueStr != null && issueStr.isNotEmpty) parsedIssue = DateTime.tryParse(issueStr);
+      }
+
+      // Supplement with client regex and heuristics across extracted text
       if (extractedRawText.isNotEmpty) {
         final regexResult = OcrEngineService.extractFields(extractedRawText);
         parsedExpiry ??= regexResult.expiryDate;
@@ -161,72 +187,101 @@ class _ScanDocumentScreenState extends State<ScanDocumentScreen> {
         if (category == 'Other' && regexResult.category != 'Other') {
           category = regexResult.category;
         }
+        if (title == 'Scanned Document' &&
+            regexResult.title != 'Scanned Document' &&
+            regexResult.title != 'New Document') {
+          title = regexResult.title;
+        }
       }
-    } else {
-      // Offline fallback: inform user without injecting fake data
-      extractedRawText = '';
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          behavior: SnackBarBehavior.floating,
-          content: Text('Online OCR unavailable. Please enter details or paste extracted text below.'),
-        ),
-      );
-    }
 
-    _textInputController.text = extractedRawText;
-    _titleController.text = title;
-    _selectedCategory = category;
-    _extractedExpiry = parsedExpiry;
-    _extractedIssue = parsedIssue;
-    if (docNum != null) _numberController.text = docNum;
-    if (amount != null) _amountController.text = amount;
-    if (notes != null && notes.isNotEmpty) _notesController.text = notes;
+      if (extractedRawText.isEmpty && (visionResult == null || visionResult.isEmpty)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            behavior: SnackBarBehavior.floating,
+            content: Text('No text detected. Please enter details or paste text below.'),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: AppColors.emerald,
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    usedOnDeviceOcr
+                        ? 'Text extracted via on-device OCR'
+                        : 'Document analyzed & extracted by Gemini AI',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
 
-    _detectedTokens = [
-      'Title: $title',
-      'Category: $category',
-      if (docNum != null && docNum.isNotEmpty) 'ID: $docNum',
-      if (parsedExpiry != null)
-        'Expiry: ${DateFormatter.formatShort(parsedExpiry)}',
-      if (amount != null && amount.isNotEmpty) 'Amount: $amount',
-    ];
+      _textInputController.text = extractedRawText;
+      _titleController.text = title;
+      _selectedCategory = category;
+      _extractedExpiry = parsedExpiry;
+      _extractedIssue = parsedIssue;
+      if (docNum != null) _numberController.text = docNum;
+      if (amount != null) _amountController.text = amount;
+      if (notes != null && notes.isNotEmpty) _notesController.text = notes;
 
-    _lastResult = OcrExtractionResult(
-      rawText: extractedRawText,
-      title: title,
-      category: category,
-      documentNumber: docNum,
-      amount: amount,
-      expiryDate: parsedExpiry,
-      issueDate: parsedIssue,
-      confidenceScore: visionResult != null ? 0.98 : 0.40,
-      detectedTokens: _detectedTokens,
-    );
+      _detectedTokens = [
+        'Title: $title',
+        'Category: $category',
+        if (docNum != null && docNum.isNotEmpty) 'ID: $docNum',
+        if (parsedExpiry != null)
+          'Expiry: ${DateFormatter.formatShort(parsedExpiry)}',
+        if (amount != null && amount.isNotEmpty) 'Amount: $amount',
+      ];
 
-    setState(() {
-      _isScanning = false;
-      _isExtracted = true;
-    });
-
-    // 3. Run Deep AI Document Analysis on actual text if available
-    if (extractedRawText.isNotEmpty) {
-      final aiReport = await GeminiAiService.analyzeDocumentDeeply(
-        text: extractedRawText,
+      _lastResult = OcrExtractionResult(
+        rawText: extractedRawText,
         title: title,
         category: category,
-        apiKey: profile.geminiApiKey,
-        model: profile.geminiModel,
+        documentNumber: docNum,
+        amount: amount,
+        expiryDate: parsedExpiry,
+        issueDate: parsedIssue,
+        confidenceScore: visionResult != null ? 0.98 : 0.40,
+        detectedTokens: _detectedTokens,
       );
 
-      if (mounted) {
-        setState(() {
-          _isAnalyzingAi = false;
-          _aiAnalysis = aiReport;
-        });
+      setState(() {
+        _isScanning = false;
+        _isExtracted = true;
+      });
+
+      // 3. Run Deep AI Document Analysis on actual text if available
+      if (extractedRawText.isNotEmpty) {
+        final aiReport = await GeminiAiService.analyzeDocumentDeeply(
+          text: extractedRawText,
+          title: title,
+          category: category,
+          apiKey: profile.geminiApiKey,
+          model: profile.geminiModel,
+        );
+
+        if (mounted) {
+          setState(() {
+            _isAnalyzingAi = false;
+            _aiAnalysis = aiReport;
+          });
+        }
       }
-    } else {
+    } catch (e) {
+      debugPrint('Document processing error: $e');
+    } finally {
       if (mounted) {
         setState(() {
+          _isScanning = false;
           _isAnalyzingAi = false;
         });
       }
@@ -246,39 +301,50 @@ class _ScanDocumentScreenState extends State<ScanDocumentScreen> {
       _isAnalyzingAi = true;
     });
 
-    final result = OcrEngineService.extractFields(rawText);
+    try {
+      final result = OcrEngineService.extractFields(rawText);
 
-    setState(() {
-      _isScanning = false;
-      _isExtracted = true;
-      _lastResult = result;
-      _titleController.text = result.title;
-      _selectedCategory = result.category;
-      _extractedExpiry = result.expiryDate;
-      _extractedIssue = result.issueDate;
-      if (result.documentNumber != null) {
-        _numberController.text = result.documentNumber!;
-      }
-      if (result.amount != null) {
-        _amountController.text = result.amount!;
-      }
-      _detectedTokens = result.detectedTokens;
-    });
-
-    final profile = widget.vaultState.userProfile;
-    final aiReport = await GeminiAiService.analyzeDocumentDeeply(
-      text: rawText,
-      title: result.title,
-      category: result.category,
-      apiKey: profile.geminiApiKey,
-      model: profile.geminiModel,
-    );
-
-    if (mounted) {
       setState(() {
-        _isAnalyzingAi = false;
-        _aiAnalysis = aiReport;
+        _isScanning = false;
+        _isExtracted = true;
+        _lastResult = result;
+        _titleController.text = result.title;
+        _selectedCategory = result.category;
+        _extractedExpiry = result.expiryDate;
+        _extractedIssue = result.issueDate;
+        if (result.documentNumber != null) {
+          _numberController.text = result.documentNumber!;
+        }
+        if (result.amount != null) {
+          _amountController.text = result.amount!;
+        }
+        _detectedTokens = result.detectedTokens;
       });
+
+      final profile = widget.vaultState.userProfile;
+      final aiReport = await GeminiAiService.analyzeDocumentDeeply(
+        text: rawText,
+        title: result.title,
+        category: result.category,
+        apiKey: profile.geminiApiKey,
+        model: profile.geminiModel,
+      );
+
+      if (mounted) {
+        setState(() {
+          _isAnalyzingAi = false;
+          _aiAnalysis = aiReport;
+        });
+      }
+    } catch (e) {
+      debugPrint('OCR extraction error: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isScanning = false;
+          _isAnalyzingAi = false;
+        });
+      }
     }
   }
 
@@ -324,6 +390,12 @@ class _ScanDocumentScreenState extends State<ScanDocumentScreen> {
       issueDate: _extractedIssue,
       expiryDate: _extractedExpiry,
       rawOcrText: _textInputController.text.trim(),
+      attachmentBytesBase64: _pickedImageBytes != null
+          ? base64Encode(_pickedImageBytes!)
+          : null,
+      attachmentFileName: _pickedFileName ?? 'scan_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      attachmentType: 'image/jpeg',
+      attachmentSize: _pickedImageBytes?.length,
       detail: 'Scanned & analyzed by LifeVault AI',
       tags: _aiAnalysis != null && _aiAnalysis!['tags'] != null
           ? List<String>.from(_aiAnalysis!['tags'] as List)
@@ -442,6 +514,8 @@ class _ScanDocumentScreenState extends State<ScanDocumentScreen> {
                                   : (_pickedFileName != null
                                         ? 'Loaded: $_pickedFileName'
                                         : 'Document Scanner Viewfinder'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w800,
@@ -518,7 +592,10 @@ class _ScanDocumentScreenState extends State<ScanDocumentScreen> {
                           padding: const EdgeInsets.symmetric(vertical: 14),
                         ),
                         icon: const Icon(Icons.camera_alt_rounded, size: 18),
-                        label: const Text('Scan with Camera'),
+                        label: const FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text('Scan with Camera'),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -532,11 +609,107 @@ class _ScanDocumentScreenState extends State<ScanDocumentScreen> {
                           Icons.photo_library_outlined,
                           size: 18,
                         ),
-                        label: const Text('Upload File / Photo'),
+                        label: const FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text('Upload File / Photo'),
+                        ),
                       ),
                     ),
                   ],
                 ),
+
+                // 📷 Attached / Captured Original Document Preview Card
+                if (_pickedImageBytes != null) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1B222E) : const Color(0xFFEFF3F8),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: accent.withValues(alpha: isDark ? 0.35 : 0.25),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.memory(
+                            _pickedImageBytes!,
+                            width: 48,
+                            height: 48,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _pickedFileName ?? 'Captured Document Image',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${(_pickedImageBytes!.length / 1024).toStringAsFixed(1)} KB • Original Media Stored',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isDark ? AppColors.darkMuted : AppColors.muted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.fullscreen_rounded, size: 22),
+                          tooltip: 'In-App Fullscreen Preview',
+                          onPressed: () {
+                            FileAttachmentPreviewDialog.show(
+                              context,
+                              title: _titleController.text.isNotEmpty
+                                  ? _titleController.text
+                                  : (_pickedFileName ?? 'Document Image'),
+                              attachmentBytes: _pickedImageBytes,
+                              fileName: _pickedFileName,
+                              mimeType: 'image/jpeg',
+                              rawOcrText: _textInputController.text,
+                            );
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.download_rounded, size: 20),
+                          tooltip: 'Download to Phone Storage',
+                          onPressed: () async {
+                            final name = _pickedFileName ?? 'scanned_doc_${DateTime.now().millisecondsSinceEpoch}.jpg';
+                            final b64 = _pickedImageBytes != null ? base64Encode(_pickedImageBytes!) : null;
+
+                            final result = await PlatformAudioDownloadHelper.downloadFile(
+                              fileName: name,
+                              base64Data: b64,
+                              textContent: _textInputController.text,
+                              mimeType: 'image/jpeg',
+                            );
+
+                            if (!mounted) return;
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  result.success
+                                      ? '✓ Saved "$name" to Phone ${result.storageType}'
+                                      : 'Could not download "$name"',
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
 
                 // 🤖 Deep AI Document Analysis Card
                 if (_isExtracted || _aiAnalysis != null) ...[
@@ -901,10 +1074,13 @@ class _ScanDocumentScreenState extends State<ScanDocumentScreen> {
                                   Icons.calendar_today_outlined,
                                   size: 16,
                                 ),
-                                label: Text(
-                                  _extractedIssue != null
-                                      ? 'Issued: ${DateFormatter.formatShort(_extractedIssue!)}'
-                                      : 'Set Issue Date',
+                                label: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    _extractedIssue != null
+                                        ? 'Issued: ${DateFormatter.formatShort(_extractedIssue!)}'
+                                        : 'Set Issue Date',
+                                  ),
                                 ),
                               ),
                             ),
@@ -916,10 +1092,13 @@ class _ScanDocumentScreenState extends State<ScanDocumentScreen> {
                                   Icons.event_outlined,
                                   size: 16,
                                 ),
-                                label: Text(
-                                  _extractedExpiry != null
-                                      ? 'Expiry: ${DateFormatter.formatShort(_extractedExpiry!)}'
-                                      : 'Set Expiry Date',
+                                label: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    _extractedExpiry != null
+                                        ? 'Expiry: ${DateFormatter.formatShort(_extractedExpiry!)}'
+                                        : 'Set Expiry Date',
+                                  ),
                                 ),
                               ),
                             ),

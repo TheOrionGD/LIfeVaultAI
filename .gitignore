@@ -18,6 +18,7 @@ key.properties
 google-services.json
 GoogleService-Info.plist
 firebase_options.dart.bak
+lib/core/config/app_env.dart
 
 # ------------------------------------------------------------------------------
 # Flutter, Dart & Package Manager

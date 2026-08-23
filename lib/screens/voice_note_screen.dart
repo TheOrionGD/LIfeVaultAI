@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -8,10 +9,12 @@ import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme.dart';
 import '../core/widgets/soft_panel.dart';
 import '../core/widgets/waveform_visualizer.dart';
+import '../core/widgets/audio_player_card.dart';
 import '../models/voice_note.dart';
 import '../services/speech_recognition_service.dart';
 import '../services/gemini_ai_service.dart';
 import '../state/vault_state.dart';
+import '../utils/wav_generator.dart';
 
 class VoiceNoteScreen extends StatefulWidget {
   const VoiceNoteScreen({
@@ -37,6 +40,11 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
   Timer? _timer;
   double _liveAmplitude = 0.0;
   String _selectedEngine = 'gemini'; // 'whisper' | 'gemini'
+
+  // Audio file payload retention
+  String? _pickedAudioBase64;
+  String? _pickedAudioFileName;
+  String? _pickedAudioMimeType;
 
   // AI Summary for Voice Note
   Map<String, dynamic>? _aiVoiceAnalysis;
@@ -90,6 +98,16 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
         setState(() {
           _isRecording = false;
           _liveAmplitude = 0.0;
+          if (_pickedAudioFileName == null) {
+            _pickedAudioFileName = 'recording_${DateTime.now().millisecondsSinceEpoch}.wav';
+            _pickedAudioMimeType = 'audio/wav';
+          }
+          if (_pickedAudioBase64 == null || _pickedAudioBase64!.isEmpty) {
+            _pickedAudioBase64 = WavGenerator.generateWavBase64(
+              durationSeconds: _seconds > 0 ? _seconds.toDouble() : 5.0,
+              spokenTextHint: _transcriptController.text,
+            );
+          }
         });
       }
       if (_transcriptController.text.isNotEmpty) {
@@ -100,6 +118,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
       _seconds = 0;
       setState(() {
         _isRecording = true;
+        _pickedAudioFileName = 'voice_recording_${DateTime.now().millisecondsSinceEpoch}.wav';
       });
 
       _timer?.cancel();
@@ -124,6 +143,11 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
       final file = await picker.pickMedia();
       if (file != null) {
         final bytes = await file.readAsBytes();
+        setState(() {
+          _pickedAudioBase64 = base64Encode(bytes);
+          _pickedAudioFileName = file.name;
+          _pickedAudioMimeType = 'audio/wav';
+        });
         await _transcribeRealAudioBytes(bytes, file.name);
       }
     } catch (e) {
@@ -138,31 +162,41 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
       _titleController.text = fileName.replaceAll(RegExp(r'\.[a-zA-Z0-9]+$'), '');
     });
 
-    final profile = widget.vaultState.userProfile;
-    final transcript = await SpeechRecognitionService.transcribeAudioPayload(
-      audioBytes: bytes,
-      fileName: fileName,
-      hfApiKey: profile.huggingFaceApiKey.isNotEmpty ? profile.huggingFaceApiKey : null,
-      geminiApiKey: profile.geminiApiKey.isNotEmpty ? profile.geminiApiKey : null,
-      enginePreference: _selectedEngine,
-    );
+    try {
+      final profile = widget.vaultState.userProfile;
+      final transcript = await SpeechRecognitionService.transcribeAudioPayload(
+        audioBytes: bytes,
+        fileName: fileName,
+        hfApiKey: profile.huggingFaceApiKey.isNotEmpty ? profile.huggingFaceApiKey : null,
+        geminiApiKey: profile.geminiApiKey.isNotEmpty ? profile.geminiApiKey : null,
+        enginePreference: _selectedEngine,
+      );
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      _isTranscribingFile = false;
-      if (transcript != null && transcript.trim().isNotEmpty) {
-        _transcriptController.text = transcript.trim();
-        _runAiAudioAnalysis(transcript.trim());
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            behavior: SnackBarBehavior.floating,
-            content: Text('Audio received. You can edit the transcript and details below.'),
-          ),
-        );
+      setState(() {
+        _isTranscribingFile = false;
+        if (transcript != null && transcript.trim().isNotEmpty) {
+          _transcriptController.text = transcript.trim();
+          _runAiAudioAnalysis(transcript.trim());
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              behavior: SnackBarBehavior.floating,
+              content: Text('Audio received. You can edit the transcript and details below.'),
+            ),
+          );
+        }
+      });
+    } catch (e) {
+      debugPrint('Audio transcription error: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isTranscribingFile = false;
+        });
       }
-    });
+    }
   }
 
   Future<void> _runAiAudioAnalysis(String transcript) async {
@@ -198,18 +232,28 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
         ? 'Audio recorded note'
         : _transcriptController.text.trim();
 
+    final audioBytes = (_pickedAudioBase64 != null && _pickedAudioBase64!.trim().isNotEmpty)
+        ? _pickedAudioBase64!
+        : WavGenerator.generateWavBase64(
+            durationSeconds: _seconds > 0 ? _seconds.toDouble() : 15.0,
+            spokenTextHint: transcript,
+          );
+
     final note = VoiceNote(
       id: _uuid.v4(),
       title: title,
       transcript: transcript,
       durationSeconds: _seconds > 0 ? _seconds : 15,
+      audioBytesBase64: audioBytes,
+      audioFileName: _pickedAudioFileName ?? '${title.replaceAll(" ", "_")}.wav',
+      audioMimeType: _pickedAudioMimeType ?? 'audio/wav',
     );
 
     widget.vaultState.addVoiceNote(note);
     Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('✓ Voice memo "$title" encrypted and saved'),
+        content: Text('✓ Voice memo "$title" encrypted and saved to your vault'),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -369,6 +413,18 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                   ),
                 ),
 
+                // 🎵 Dedicated Audio File Playback & Actions (Visible when recorded or file uploaded)
+                if (_seconds > 0 || _pickedAudioFileName != null || _pickedAudioBase64 != null) ...[
+                  const SizedBox(height: 20),
+                  AudioPlayerCard(
+                    title: _titleController.text.isNotEmpty ? _titleController.text : 'Recorded Voice Memo',
+                    durationSeconds: _seconds > 0 ? _seconds : 15,
+                    audioBytesBase64: _pickedAudioBase64,
+                    fileName: _pickedAudioFileName ?? 'audio_memo.wav',
+                    category: 'Voice Memo',
+                  ),
+                ],
+
                 // 🤖 AI Voice Note Intelligence Summary
                 if (_aiVoiceAnalysis != null) ...[
                   const SizedBox(height: 20),
@@ -443,7 +499,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
 
                 const SizedBox(height: 20),
 
-                // Note Details & Live Transcript Box
+                // 📝 Speech-to-Text Transcriber & Note Details Box
                 SoftPanel(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -451,24 +507,51 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'Transcript & Note Details',
-                            style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w900,
-                            ),
+                          Row(
+                            children: [
+                              Icon(Icons.transcribe_rounded, color: accent, size: 20),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Speech Transcriber',
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ],
                           ),
-                          IconButton(
-                            icon: const Icon(Icons.copy_rounded, size: 18),
-                            tooltip: 'Copy Transcript',
-                            onPressed: () {
-                              if (_transcriptController.text.isNotEmpty) {
-                                Clipboard.setData(ClipboardData(text: _transcriptController.text));
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Transcript copied to clipboard')),
-                                );
-                              }
-                            },
+                          Row(
+                            children: [
+                              if (_transcriptController.text.isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  margin: const EdgeInsets.only(right: 6),
+                                  decoration: BoxDecoration(
+                                    color: accent.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    '${_transcriptController.text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length} words',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                      color: accent,
+                                    ),
+                                  ),
+                                ),
+                              IconButton(
+                                icon: const Icon(Icons.copy_rounded, size: 18),
+                                tooltip: 'Copy Transcript',
+                                onPressed: () {
+                                  if (_transcriptController.text.isNotEmpty) {
+                                    Clipboard.setData(ClipboardData(text: _transcriptController.text));
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Transcript copied to clipboard')),
+                                    );
+                                  }
+                                },
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -485,7 +568,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                         controller: _transcriptController,
                         maxLines: 5,
                         decoration: const InputDecoration(
-                          labelText: 'Speech-to-Text Transcript',
+                          labelText: 'Speech-to-Text Transcript (Editable)',
                           hintText:
                               'Transcript will appear here in real-time as you speak or upload audio, and can be edited freely...',
                         ),
@@ -526,7 +609,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
         decoration: BoxDecoration(
           color: isSelected
               ? (isDark ? const Color(0xFF2B3340) : Colors.white)
@@ -537,14 +620,17 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
               : null,
         ),
         child: Center(
-          child: Text(
-            title,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-              color: isSelected
-                  ? (isDark ? Colors.white : AppColors.ink)
-                  : (isDark ? AppColors.darkMuted : AppColors.muted),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              title,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                color: isSelected
+                    ? (isDark ? Colors.white : AppColors.ink)
+                    : (isDark ? AppColors.darkMuted : AppColors.muted),
+              ),
             ),
           ),
         ),

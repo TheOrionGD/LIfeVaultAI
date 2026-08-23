@@ -132,6 +132,8 @@ class EmergencyCardScreen extends StatelessWidget {
                                   profile.hasName
                                       ? profile.name
                                       : 'LifeVault Owner',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     fontSize: 22,
                                     fontWeight: FontWeight.w900,
@@ -145,6 +147,8 @@ class EmergencyCardScreen extends StatelessWidget {
                                   profile.email.isNotEmpty
                                       ? profile.email
                                       : 'Verified Vault Identity',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     fontSize: 13,
                                     color: isDark
