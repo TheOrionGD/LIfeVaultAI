@@ -1,4 +1,4 @@
-// ignore_for_file: avoid_web_libraries_in_flutter
+// ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
 import 'dart:html' as html;
 import 'package:flutter/foundation.dart';
 import '../models/save_result.dart';
@@ -9,6 +9,7 @@ export '../models/save_result.dart';
 class PlatformAudioDownloadImpl {
   static html.AudioElement? _activeAudioElement;
   static html.SpeechSynthesisUtterance? _activeSpeechUtterance;
+  static html.SpeechSynthesisUtterance? get activeSpeechUtterance => _activeSpeechUtterance;
 
   static void playAudio({
     String? base64Data,
@@ -23,33 +24,11 @@ class PlatformAudioDownloadImpl {
         final dataUrl = 'data:$mimeType;base64,$cleanBase64';
         _activeAudioElement = html.AudioElement(dataUrl);
         _activeAudioElement?.play().catchError((err) {
-          debugPrint('AudioElement play catch: $err');
-          _playSpeechSynthesisFallback(textToSpeak);
+          debugPrint('AudioElement playback error: $err');
         });
-      } else {
-        _playSpeechSynthesisFallback(textToSpeak);
       }
     } catch (e) {
-      debugPrint('Error playing audio sound on Web: $e');
-      _playSpeechSynthesisFallback(textToSpeak);
-    }
-  }
-
-  static void _playSpeechSynthesisFallback(String? text) {
-    if (text == null || text.trim().isEmpty) return;
-    try {
-      final synth = html.window.speechSynthesis;
-      if (synth != null) {
-        synth.cancel();
-        final utterance = html.SpeechSynthesisUtterance(text)
-          ..rate = 1.0
-          ..pitch = 1.0
-          ..volume = 1.0;
-        _activeSpeechUtterance = utterance;
-        synth.speak(utterance);
-      }
-    } catch (e) {
-      debugPrint('Speech synthesis error: $e');
+      debugPrint('Error playing audio on Web: $e');
     }
   }
 

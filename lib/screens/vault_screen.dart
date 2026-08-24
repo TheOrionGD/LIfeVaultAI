@@ -203,14 +203,14 @@ class _VaultScreenState extends State<VaultScreen> {
                             ? const Icon(Icons.folder_open_rounded, size: 14)
                             : null,
                         backgroundColor: selected
-                            ? (isDark ? accent : AppColors.ink)
+                            ? accent
                             : null,
                         label: Text(
                           '$cat ($count)',
                           style: TextStyle(
                             color: selected
                                 ? (isDark ? AppColors.ink : Colors.white)
-                                : null,
+                                : (isDark ? AppColors.darkText : AppColors.ink),
                             fontWeight: selected
                                 ? FontWeight.w800
                                 : FontWeight.w600,

@@ -274,7 +274,7 @@ class _SideNavigationRail extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: isSelected
-                        ? (isDark ? accent.withValues(alpha: 0.15) : AppColors.ink)
+                        ? accent.withValues(alpha: isDark ? 0.2 : 0.12)
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -284,7 +284,7 @@ class _SideNavigationRail extends StatelessWidget {
                         item.$1,
                         size: 20,
                         color: isSelected
-                            ? (isDark ? accent : Colors.white)
+                            ? (isDark ? accent : accent)
                             : (isDark ? AppColors.darkMuted : AppColors.muted),
                       ),
                       const SizedBox(width: 12),
@@ -295,7 +295,7 @@ class _SideNavigationRail extends StatelessWidget {
                             fontSize: 14,
                             fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
                             color: isSelected
-                                ? (isDark ? accent : Colors.white)
+                                ? (isDark ? accent : AppColors.ink)
                                 : (isDark ? AppColors.darkText : AppColors.ink),
                           ),
                         ),

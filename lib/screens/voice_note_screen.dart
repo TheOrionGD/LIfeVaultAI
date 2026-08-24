@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -13,14 +14,12 @@ import '../core/widgets/audio_player_card.dart';
 import '../models/voice_note.dart';
 import '../services/speech_recognition_service.dart';
 import '../services/gemini_ai_service.dart';
+import '../services/audio_recorder_helper.dart';
 import '../state/vault_state.dart';
 import '../utils/wav_generator.dart';
 
 class VoiceNoteScreen extends StatefulWidget {
-  const VoiceNoteScreen({
-    super.key,
-    required this.vaultState,
-  });
+  const VoiceNoteScreen({super.key, required this.vaultState});
 
   final VaultState vaultState;
 
@@ -52,7 +51,8 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedEngine = widget.vaultState.userProfile.sttEnginePreference.isNotEmpty
+    _selectedEngine =
+        widget.vaultState.userProfile.sttEnginePreference.isNotEmpty
         ? widget.vaultState.userProfile.sttEnginePreference
         : 'gemini';
 
@@ -92,33 +92,54 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
     if (_isRecording) {
       // Stop recording
       await _speechService.stopListening();
+      final recordedAudioResult = await AudioRecorderHelper.stopRecording(
+        durationSeconds: _seconds > 0 ? _seconds.toDouble() : 5.0,
+      );
+
       _timer?.cancel();
       _timer = null;
       if (mounted) {
         setState(() {
           _isRecording = false;
           _liveAmplitude = 0.0;
-          if (_pickedAudioFileName == null) {
-            _pickedAudioFileName = 'recording_${DateTime.now().millisecondsSinceEpoch}.wav';
-            _pickedAudioMimeType = 'audio/wav';
+          if (recordedAudioResult != null &&
+              recordedAudioResult.base64Data.isNotEmpty) {
+            _pickedAudioBase64 = recordedAudioResult.base64Data;
+            _pickedAudioFileName = recordedAudioResult.fileName;
+            _pickedAudioMimeType = recordedAudioResult.mimeType;
+          } else {
+            if (_pickedAudioFileName == null) {
+              _pickedAudioFileName =
+                  'recording_${DateTime.now().millisecondsSinceEpoch}.webm';
+              _pickedAudioMimeType = 'audio/webm';
+            }
           }
-          if (_pickedAudioBase64 == null || _pickedAudioBase64!.isEmpty) {
-            _pickedAudioBase64 = WavGenerator.generateWavBase64(
-              durationSeconds: _seconds > 0 ? _seconds.toDouble() : 5.0,
-              spokenTextHint: _transcriptController.text,
-            );
+
+          if (_titleController.text.trim().isEmpty) {
+            _titleController.text = 'Voice Memo';
           }
         });
       }
-      if (_transcriptController.text.isNotEmpty) {
+
+      // Automatically transcribe real recorded microphone audio bytes using Gemini Multimodal Audio AI / Whisper
+      if (_pickedAudioBase64 != null && _pickedAudioBase64!.isNotEmpty) {
+        try {
+          final audioBytes = base64Decode(_pickedAudioBase64!);
+          await _transcribeRealAudioBytes(audioBytes, _pickedAudioFileName ?? 'recording.webm');
+        } catch (e) {
+          debugPrint('Recorded audio transcription note: $e');
+        }
+      } else if (_transcriptController.text.isNotEmpty) {
         _runAiAudioAnalysis(_transcriptController.text);
       }
     } else {
       // Start recording
       _seconds = 0;
+      _pickedAudioBase64 = null;
       setState(() {
         _isRecording = true;
-        _pickedAudioFileName = 'voice_recording_${DateTime.now().millisecondsSinceEpoch}.wav';
+        _pickedAudioFileName =
+            'voice_recording_${DateTime.now().millisecondsSinceEpoch}.webm';
       });
 
       _timer?.cancel();
@@ -132,6 +153,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
         });
       });
 
+      await AudioRecorderHelper.startRecording();
       await _speechService.startListening();
     }
   }
@@ -156,10 +178,16 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
   }
 
   /// Transcribes actual audio bytes using Gemini Audio STT or Hugging Face Whisper
-  Future<void> _transcribeRealAudioBytes(List<int> bytes, String fileName) async {
+  Future<void> _transcribeRealAudioBytes(
+    List<int> bytes,
+    String fileName,
+  ) async {
     setState(() {
       _isTranscribingFile = true;
-      _titleController.text = fileName.replaceAll(RegExp(r'\.[a-zA-Z0-9]+$'), '');
+      _titleController.text = fileName.replaceAll(
+        RegExp(r'\.[a-zA-Z0-9]+$'),
+        '',
+      );
     });
 
     try {
@@ -167,8 +195,12 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
       final transcript = await SpeechRecognitionService.transcribeAudioPayload(
         audioBytes: bytes,
         fileName: fileName,
-        hfApiKey: profile.huggingFaceApiKey.isNotEmpty ? profile.huggingFaceApiKey : null,
-        geminiApiKey: profile.geminiApiKey.isNotEmpty ? profile.geminiApiKey : null,
+        hfApiKey: profile.huggingFaceApiKey.isNotEmpty
+            ? profile.huggingFaceApiKey
+            : null,
+        geminiApiKey: profile.geminiApiKey.isNotEmpty
+            ? profile.geminiApiKey
+            : null,
         enginePreference: _selectedEngine,
       );
 
@@ -183,7 +215,9 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               behavior: SnackBarBehavior.floating,
-              content: Text('Audio received. You can edit the transcript and details below.'),
+              content: Text(
+                'Audio received. You can edit the transcript and details below.',
+              ),
             ),
           );
         }
@@ -232,7 +266,8 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
         ? 'Audio recorded note'
         : _transcriptController.text.trim();
 
-    final audioBytes = (_pickedAudioBase64 != null && _pickedAudioBase64!.trim().isNotEmpty)
+    final audioBytes =
+        (_pickedAudioBase64 != null && _pickedAudioBase64!.trim().isNotEmpty)
         ? _pickedAudioBase64!
         : WavGenerator.generateWavBase64(
             durationSeconds: _seconds > 0 ? _seconds.toDouble() : 15.0,
@@ -245,7 +280,8 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
       transcript: transcript,
       durationSeconds: _seconds > 0 ? _seconds : 15,
       audioBytesBase64: audioBytes,
-      audioFileName: _pickedAudioFileName ?? '${title.replaceAll(" ", "_")}.wav',
+      audioFileName:
+          _pickedAudioFileName ?? '${title.replaceAll(" ", "_")}.wav',
       audioMimeType: _pickedAudioMimeType ?? 'audio/wav',
     );
 
@@ -253,7 +289,9 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
     Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('✓ Voice memo "$title" encrypted and saved to your vault'),
+        content: Text(
+          '✓ Voice memo "$title" encrypted and saved to your vault',
+        ),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -293,7 +331,9 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                 Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1B2028) : const Color(0xFFEFF2F6),
+                    color: isDark
+                        ? const Color(0xFF1B2028)
+                        : const Color(0xFFEFF2F6),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Row(
@@ -349,8 +389,8 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                         _isRecording
                             ? 'Listening and recording with ${_selectedEngine == "whisper" ? "Hugging Face Whisper" : "Gemini Audio AI"}...'
                             : (_isTranscribingFile
-                                ? 'Transcribing audio memo...'
-                                : 'Tap microphone to record or upload an audio file'),
+                                  ? 'Transcribing audio memo...'
+                                  : 'Tap microphone to record or upload an audio file'),
                         style: TextStyle(
                           color: isDark ? AppColors.darkMuted : AppColors.muted,
                           fontSize: 13,
@@ -366,8 +406,13 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                         runSpacing: 12,
                         children: [
                           FilledButton.tonalIcon(
-                            onPressed: _isTranscribingFile ? null : _pickAudioFile,
-                            icon: const Icon(Icons.audio_file_rounded, size: 18),
+                            onPressed: _isTranscribingFile
+                                ? null
+                                : _pickAudioFile,
+                            icon: const Icon(
+                              Icons.audio_file_rounded,
+                              size: 18,
+                            ),
                             label: const Text('Upload Audio'),
                           ),
                           // Large Record / Stop Button
@@ -375,22 +420,42 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                             onTap: _toggleRecording,
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 100),
-                              width: 64 + (_isRecording ? (_liveAmplitude * 6) : 0),
-                              height: 64 + (_isRecording ? (_liveAmplitude * 6) : 0),
+                              width:
+                                  64 +
+                                  (_isRecording ? (_liveAmplitude * 6) : 0),
+                              height:
+                                  64 +
+                                  (_isRecording ? (_liveAmplitude * 6) : 0),
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: _isRecording ? AppColors.crimson : accent,
+                                color: _isRecording
+                                    ? AppColors.crimson
+                                    : accent,
                                 boxShadow: [
                                   BoxShadow(
-                                    color: (_isRecording ? AppColors.crimson : accent)
-                                        .withValues(alpha: _isRecording ? (0.4 + (_liveAmplitude * 0.4)).clamp(0.4, 0.9) : 0.45),
-                                    blurRadius: _isRecording ? (16 + (_liveAmplitude * 12)) : 16,
+                                    color:
+                                        (_isRecording
+                                                ? AppColors.crimson
+                                                : accent)
+                                            .withValues(
+                                              alpha: _isRecording
+                                                  ? (0.4 +
+                                                            (_liveAmplitude *
+                                                                0.4))
+                                                        .clamp(0.4, 0.9)
+                                                  : 0.45,
+                                            ),
+                                    blurRadius: _isRecording
+                                        ? (16 + (_liveAmplitude * 12))
+                                        : 16,
                                     offset: const Offset(0, 4),
                                   ),
                                 ],
                               ),
                               child: Icon(
-                                _isRecording ? Icons.stop_rounded : Icons.mic_rounded,
+                                _isRecording
+                                    ? Icons.stop_rounded
+                                    : Icons.mic_rounded,
                                 color: Colors.white,
                                 size: 30,
                               ),
@@ -414,13 +479,19 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                 ),
 
                 // 🎵 Dedicated Audio File Playback & Actions (Visible when recorded or file uploaded)
-                if (_seconds > 0 || _pickedAudioFileName != null || _pickedAudioBase64 != null) ...[
+                if (_seconds > 0 ||
+                    _pickedAudioFileName != null ||
+                    _pickedAudioBase64 != null) ...[
                   const SizedBox(height: 20),
                   AudioPlayerCard(
-                    title: _titleController.text.isNotEmpty ? _titleController.text : 'Recorded Voice Memo',
+                    title: _titleController.text.isNotEmpty
+                        ? _titleController.text
+                        : 'Recorded Voice Memo',
                     durationSeconds: _seconds > 0 ? _seconds : 15,
                     audioBytesBase64: _pickedAudioBase64,
-                    fileName: _pickedAudioFileName ?? 'audio_memo.wav',
+                    mimeType: _pickedAudioMimeType ?? 'audio/webm',
+                    transcript: _transcriptController.text,
+                    fileName: _pickedAudioFileName ?? 'audio_memo.webm',
                     category: 'Voice Memo',
                   ),
                 ],
@@ -429,7 +500,9 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                 if (_aiVoiceAnalysis != null) ...[
                   const SizedBox(height: 20),
                   SoftPanel(
-                    color: isDark ? const Color(0xFF1B232F) : const Color(0xFFF3F7FC),
+                    color: isDark
+                        ? const Color(0xFF1B232F)
+                        : const Color(0xFFF3F7FC),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -441,7 +514,11 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                                 color: accent.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: Icon(Icons.psychology_rounded, color: accent, size: 22),
+                              child: Icon(
+                                Icons.psychology_rounded,
+                                color: accent,
+                                size: 22,
+                              ),
                             ),
                             const SizedBox(width: 12),
                             const Expanded(
@@ -450,11 +527,17 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                                 children: [
                                   Text(
                                     'AI Voice Intelligence & Action Items',
-                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w900,
+                                    ),
                                   ),
                                   Text(
                                     'Extracted summary & tasks from your speech',
-                                    style: TextStyle(fontSize: 11, color: AppColors.muted),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.muted,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -463,34 +546,45 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          _aiVoiceAnalysis!['summary'] as String? ?? 'Voice note analyzed.',
+                          _aiVoiceAnalysis!['summary'] as String? ??
+                              'Voice note analyzed.',
                           style: TextStyle(
                             fontSize: 13,
                             color: isDark ? Colors.white70 : AppColors.ink,
                             height: 1.4,
                           ),
                         ),
-                        if (_aiVoiceAnalysis!['actionRecommendations'] != null) ...[
+                        if (_aiVoiceAnalysis!['actionRecommendations'] !=
+                            null) ...[
                           const SizedBox(height: 10),
-                          ...(List<String>.from(_aiVoiceAnalysis!['actionRecommendations'] as List))
-                              .map((act) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 4),
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.check_circle_outline_rounded, size: 14, color: accent),
-                                        const SizedBox(width: 6),
-                                        Expanded(
-                                          child: Text(
-                                            act,
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: isDark ? Colors.white60 : Colors.black87,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
+                          ...(List<String>.from(
+                            _aiVoiceAnalysis!['actionRecommendations'] as List,
+                          )).map(
+                            (act) => Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.check_circle_outline_rounded,
+                                    size: 14,
+                                    color: accent,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      act,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: isDark
+                                            ? Colors.white60
+                                            : Colors.black87,
+                                      ),
                                     ),
-                                  )),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         ],
                       ],
                     ),
@@ -509,7 +603,11 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                         children: [
                           Row(
                             children: [
-                              Icon(Icons.transcribe_rounded, color: accent, size: 20),
+                              Icon(
+                                Icons.transcribe_rounded,
+                                color: accent,
+                                size: 20,
+                              ),
                               const SizedBox(width: 8),
                               const Text(
                                 'Speech Transcriber',
@@ -524,7 +622,10 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                             children: [
                               if (_transcriptController.text.isNotEmpty)
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
                                   margin: const EdgeInsets.only(right: 6),
                                   decoration: BoxDecoration(
                                     color: accent.withValues(alpha: 0.15),
@@ -544,9 +645,17 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                                 tooltip: 'Copy Transcript',
                                 onPressed: () {
                                   if (_transcriptController.text.isNotEmpty) {
-                                    Clipboard.setData(ClipboardData(text: _transcriptController.text));
+                                    Clipboard.setData(
+                                      ClipboardData(
+                                        text: _transcriptController.text,
+                                      ),
+                                    );
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('Transcript copied to clipboard')),
+                                      const SnackBar(
+                                        content: Text(
+                                          'Transcript copied to clipboard',
+                                        ),
+                                      ),
                                     );
                                   }
                                 },
@@ -569,8 +678,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                         maxLines: 5,
                         decoration: const InputDecoration(
                           labelText: 'Speech-to-Text Transcript (Editable)',
-                          hintText:
-                              'Transcript will appear here in real-time as you speak or upload audio, and can be edited freely...',
+                          hintText: 'Transcript will appear here in real-time as you speak or upload audio, and can be edited freely...',
                         ),
                       ),
                       const SizedBox(height: 20),
@@ -616,7 +724,13 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
               : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
           boxShadow: isSelected
-              ? [const BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))]
+              ? [
+                  const BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                  ),
+                ]
               : null,
         ),
         child: Center(

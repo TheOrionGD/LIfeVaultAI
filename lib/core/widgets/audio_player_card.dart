@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../../services/platform_audio_download_helper.dart';
-import '../../utils/wav_generator.dart';
 import 'waveform_visualizer.dart';
 
 class AudioPlayerCard extends StatefulWidget {
@@ -12,6 +11,8 @@ class AudioPlayerCard extends StatefulWidget {
     required this.title,
     required this.durationSeconds,
     this.audioBytesBase64,
+    this.mimeType = 'audio/wav',
+    this.transcript,
     this.fileName,
     this.category = 'Voice Memo',
     this.onDelete,
@@ -20,6 +21,8 @@ class AudioPlayerCard extends StatefulWidget {
   final String title;
   final int durationSeconds;
   final String? audioBytesBase64;
+  final String mimeType;
+  final String? transcript;
   final String? fileName;
   final String category;
   final VoidCallback? onDelete;
@@ -36,14 +39,11 @@ class _AudioPlayerCardState extends State<AudioPlayerCard> {
   int get _effectiveDuration =>
       widget.durationSeconds > 0 ? widget.durationSeconds : 15;
 
-  String get _effectiveAudioBase64 {
+  String? get _effectiveAudioBase64 {
     if (widget.audioBytesBase64 != null && widget.audioBytesBase64!.trim().isNotEmpty) {
       return widget.audioBytesBase64!.trim();
     }
-    return WavGenerator.generateWavBase64(
-      durationSeconds: _effectiveDuration.toDouble(),
-      spokenTextHint: widget.title,
-    );
+    return null;
   }
 
   @override
@@ -61,16 +61,33 @@ class _AudioPlayerCardState extends State<AudioPlayerCard> {
       PlatformAudioDownloadHelper.stopAudio();
       setState(() => _isPlaying = false);
     } else {
+      final audioData = _effectiveAudioBase64;
+      if (audioData == null || audioData.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            content: const Text('No recorded audio file available for preview playback.'),
+          ),
+        );
+        return;
+      }
+
       if (_currentPosition >= _effectiveDuration) {
         _currentPosition = 0.0;
       }
       setState(() => _isPlaying = true);
 
-      // Play real audio sound sound via Web Audio / HTML5 Audio & Speech Synth
+      final effectiveMime = (widget.mimeType.isNotEmpty && widget.mimeType != 'audio/wav')
+          ? widget.mimeType
+          : ((widget.fileName != null && widget.fileName!.endsWith('.webm'))
+              ? 'audio/webm'
+              : 'audio/wav');
+
+      // Play real recorded audio stream
       PlatformAudioDownloadHelper.playAudio(
-        base64Data: _effectiveAudioBase64,
-        mimeType: 'audio/wav',
-        textToSpeak: 'Playing voice memo: ${widget.title}',
+        base64Data: audioData,
+        mimeType: effectiveMime,
       );
 
       _playbackTimer?.cancel();

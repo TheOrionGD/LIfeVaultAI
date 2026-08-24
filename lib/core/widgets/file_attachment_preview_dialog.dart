@@ -378,6 +378,7 @@ class _FileAttachmentPreviewDialogState
               fileName: widget.fileName,
               durationSeconds: widget.durationSeconds ?? 20,
               audioBytesBase64: widget.attachmentBytesBase64,
+              transcript: widget.title,
             ),
           ),
         ),

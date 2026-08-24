@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme.dart';
@@ -6,8 +7,6 @@ import '../core/widgets/soft_panel.dart';
 import '../core/widgets/profile_avatar.dart';
 import '../core/widgets/accent_color_selector_widget.dart';
 import '../core/widgets/biometric_registration_dialog.dart';
-import '../services/cloud_sync_service.dart';
-import '../services/gemini_ai_service.dart';
 import '../state/vault_state.dart';
 import '../services/platform_audio_download_helper.dart';
 import 'vault_audit_screen.dart';
@@ -55,9 +54,12 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   late final TextEditingController _physicianPhoneController;
   late final TextEditingController _hospitalController;
 
-  // AI & Cloud Controllers
-  late final TextEditingController _geminiKeyController;
-  late final TextEditingController _mongoUriController;
+  // Digital Legacy & Trustee Controllers
+  late final TextEditingController _trusteeNameController;
+  late final TextEditingController _trusteeEmailController;
+  late final TextEditingController _trusteePhoneController;
+  late final TextEditingController _trusteeRelationshipController;
+  late final TextEditingController _legacyInstructionController;
 
   // Interactive state
   late int _selectedAvatarIndex;
@@ -66,13 +68,17 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   late String _selectedCurrency;
   late int _selectedAutoLock;
   late int _selectedExpiryDays;
-  late String _selectedGeminiModel;
-  bool _isGeminiKeyVisible = false;
+  late int _selectedInactivityDays;
 
-  bool _isTestingMongo = false;
-  String? _mongoTestStatus;
-  bool _isTestingGemini = false;
-  String? _geminiTestStatus;
+  static const List<int> _inactivityOptions = [30, 60, 90, 180];
+  static const List<String> _trusteeRelationships = [
+    'Designated Trustee',
+    'Spouse / Partner',
+    'Legal Guardian',
+    'Family Member',
+    'Attorney / Executor',
+    'Trusted Friend',
+  ];
 
   static const List<String> _bloodGroups = [
     'O+',
@@ -94,12 +100,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     'JPY (¥)',
     'CAD (C\$)',
     'AUD (A\$)',
-  ];
-
-  static const List<String> _geminiModels = [
-    'gemini-3.6-flash',
-    'gemini-3.7-flash',
-    'gemini-flash-latest',
   ];
 
   static const List<String> _commonAllergies = [
@@ -160,8 +160,16 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     _hospitalController =
         TextEditingController(text: profile.preferredHospital);
 
-    _geminiKeyController = TextEditingController(text: profile.geminiApiKey);
-    _mongoUriController = TextEditingController(text: profile.mongoDbUri);
+    _trusteeNameController = TextEditingController(text: profile.trusteeName);
+    _trusteeEmailController = TextEditingController(text: profile.trusteeEmail);
+    _trusteePhoneController = TextEditingController(text: profile.trusteePhone);
+    _trusteeRelationshipController = TextEditingController(
+      text: profile.trusteeRelationship.isNotEmpty
+          ? profile.trusteeRelationship
+          : 'Designated Trustee',
+    );
+    _legacyInstructionController =
+        TextEditingController(text: profile.legacyInstruction);
 
     _selectedAvatarIndex = profile.avatarIndex;
     _selectedBloodGroup =
@@ -172,9 +180,9 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
         : 'USD (\$)';
     _selectedAutoLock = profile.autoLockMinutes;
     _selectedExpiryDays = profile.expiryAlertDays;
-    _selectedGeminiModel = _geminiModels.contains(profile.geminiModel)
-        ? profile.geminiModel
-        : 'gemini-3.7-flash';
+    _selectedInactivityDays = _inactivityOptions.contains(profile.inactivityDays)
+        ? profile.inactivityDays
+        : 90;
   }
 
   @override
@@ -201,8 +209,11 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     _physicianPhoneController.dispose();
     _hospitalController.dispose();
 
-    _geminiKeyController.dispose();
-    _mongoUriController.dispose();
+    _trusteeNameController.dispose();
+    _trusteeEmailController.dispose();
+    _trusteePhoneController.dispose();
+    _trusteeRelationshipController.dispose();
+    _legacyInstructionController.dispose();
     super.dispose();
   }
 
@@ -230,9 +241,12 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       primaryPhysician: _physicianController.text.trim(),
       physicianPhone: _physicianPhoneController.text.trim(),
       preferredHospital: _hospitalController.text.trim(),
-      geminiApiKey: _geminiKeyController.text.trim(),
-      geminiModel: _selectedGeminiModel,
-      mongoDbUri: _mongoUriController.text.trim(),
+      trusteeName: _trusteeNameController.text.trim(),
+      trusteeEmail: _trusteeEmailController.text.trim(),
+      trusteePhone: _trusteePhoneController.text.trim(),
+      trusteeRelationship: _trusteeRelationshipController.text.trim(),
+      legacyInstruction: _legacyInstructionController.text.trim(),
+      inactivityDays: _selectedInactivityDays,
       currency: _selectedCurrency,
       autoLockMinutes: _selectedAutoLock,
       expiryAlertDays: _selectedExpiryDays,
@@ -466,63 +480,112 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     );
   }
 
-  Future<void> _testMongoConnection() async {
-    final uri = _mongoUriController.text.trim();
-    if (uri.isEmpty) {
-      setState(() => _mongoTestStatus = 'Please enter a MongoDB URI first.');
-      return;
-    }
+  void _exportDigitalLegacyModal() {
+    final profile = widget.vaultState.userProfile;
+    final jsonMap = {
+      'vaultProtocol': 'LifeVault Digital Legacy Emergency Packet v1.0',
+      'generatedAt': DateTime.now().toIso8601String(),
+      'vaultOwner': {
+        'name': profile.name,
+        'email': profile.email,
+        'phone': profile.phoneNumber,
+        'bloodGroup': profile.bloodGroup,
+        'organDonor': profile.isOrganDonor,
+      },
+      'designatedTrustee': {
+        'name': _trusteeNameController.text.trim(),
+        'email': _trusteeEmailController.text.trim(),
+        'phone': _trusteePhoneController.text.trim(),
+        'relationship': _trusteeRelationshipController.text.trim(),
+      },
+      'inactivityProtocol': {
+        'checkInIntervalDays': _selectedInactivityDays,
+        'status': 'Active Safeguard',
+      },
+      'legacyInstructions': _legacyInstructionController.text.trim(),
+      'vaultSummary': {
+        'totalDocuments': widget.vaultState.documents.length,
+        'totalReceipts': widget.vaultState.receipts.length,
+        'totalVoiceNotes': widget.vaultState.voiceNotes.length,
+      },
+    };
+    final jsonStr = const JsonEncoder.withIndent('  ').convert(jsonMap);
 
-    setState(() {
-      _isTestingMongo = true;
-      _mongoTestStatus = null;
-    });
-
-    final result = await CloudSyncService.syncWithMongoAtlas(
-      uri: uri,
-      documents: widget.vaultState.documents,
-      receipts: widget.vaultState.receipts,
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.gavel_rounded, color: AppColors.butter),
+            SizedBox(width: 10),
+            Text('Digital Legacy Emergency Packet'),
+          ],
+        ),
+        content: SizedBox(
+          width: 520,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'This emergency packet contains encrypted trustee instructions, ICE medical summary, and vault manifest for legal execution.',
+                style: TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                height: 180,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.ink,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: SingleChildScrollView(
+                  child: SelectableText(
+                    jsonStr,
+                    style: const TextStyle(
+                      fontFamily: 'Courier',
+                      fontSize: 11,
+                      color: AppColors.canvas,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              final navigator = Navigator.of(ctx);
+              final fileName = 'lifevault_legacy_packet_${DateTime.now().millisecondsSinceEpoch}.json';
+              final result = await PlatformAudioDownloadHelper.downloadFile(
+                fileName: fileName,
+                textContent: jsonStr,
+                mimeType: 'application/json',
+              );
+              if (!mounted) return;
+              navigator.pop();
+              messenger.showSnackBar(
+                SnackBar(
+                  content: Text(
+                    result.success
+                        ? '✓ Legacy Packet "$fileName" saved'
+                        : 'Could not export legacy packet',
+                  ),
+                ),
+              );
+            },
+            icon: const Icon(Icons.download_rounded, size: 16),
+            label: const Text('Download Packet'),
+          ),
+        ],
+      ),
     );
-
-    setState(() {
-      _isTestingMongo = false;
-      _mongoTestStatus = result.message;
-    });
-  }
-
-  Future<void> _testGeminiConnection() async {
-    final key = _geminiKeyController.text.trim();
-    if (key.isEmpty) {
-      setState(() =>
-          _geminiTestStatus = 'Enter a Gemini API key or leave blank for local heuristic.');
-      return;
-    }
-
-    setState(() {
-      _isTestingGemini = true;
-      _geminiTestStatus = null;
-    });
-
-    try {
-      final reply = await GeminiAiService.queryVault(
-        question: 'Ping test. Confirm connection status.',
-        documents: widget.vaultState.documents,
-        receipts: widget.vaultState.receipts,
-        voiceNotes: widget.vaultState.voiceNotes,
-        profile: widget.vaultState.userProfile.copyWith(geminiApiKey: key),
-      );
-
-      setState(() {
-        _isTestingGemini = false;
-        _geminiTestStatus =
-            reply.isUser ? 'Connection established' : 'Gemini AI online & verified';
-      });
-    } catch (e) {
-      setState(() {
-        _isTestingGemini = false;
-        _geminiTestStatus = 'Gemini check completed ($e)';
-      });
-    }
   }
 
   void _exportBackupModal() {
@@ -569,6 +632,8 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           ),
           OutlinedButton.icon(
             onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              final navigator = Navigator.of(ctx);
               final fileName = 'lifevault_backup_${DateTime.now().millisecondsSinceEpoch}.json';
               final result = await PlatformAudioDownloadHelper.downloadFile(
                 fileName: fileName,
@@ -576,8 +641,8 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                 mimeType: 'application/json',
               );
               if (!mounted) return;
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
+              navigator.pop();
+              messenger.showSnackBar(
                 SnackBar(
                   content: Text(
                     result.success
@@ -1129,8 +1194,8 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                     ),
                     _buildTabChip(
                       index: 3,
-                      title: 'AI & Cloud Sync',
-                      icon: Icons.cloud_sync_outlined,
+                      title: 'Digital Legacy & Estate',
+                      icon: Icons.gavel_rounded,
                       isDark: isDark,
                     ),
                     _buildTabChip(
@@ -1238,7 +1303,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               : (isDark ? AppColors.darkText : AppColors.ink),
         ),
       ),
-      selectedColor: isDark ? accent : AppColors.ink,
+      selectedColor: accent,
       backgroundColor:
           isDark ? AppColors.darkSurface : AppColors.surface,
       shape: RoundedRectangleBorder(
@@ -1261,7 +1326,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       case 2:
         return _buildSecurityTab(isDark);
       case 3:
-        return _buildAiCloudTab(isDark);
+        return _buildDigitalLegacyTab(isDark);
       case 4:
         return _buildPreferencesTab(isDark);
       default:
@@ -1959,8 +2024,8 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     );
   }
 
-  // --- TAB 3: AI & Cloud Sync ---
-  Widget _buildAiCloudTab(bool isDark) {
+  // --- TAB 3: Digital Legacy & Estate Vault ---
+  Widget _buildDigitalLegacyTab(bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1977,7 +2042,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(
-                      Icons.auto_awesome_rounded,
+                      Icons.workspace_premium_rounded,
                       color: AppColors.butter,
                       size: 20,
                     ),
@@ -1985,7 +2050,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                   const SizedBox(width: 12),
                   const Expanded(
                     child: Text(
-                      'Google Gemini AI Intelligence Layer',
+                      'Designated Trustee & Estate Executor',
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w900,
@@ -1996,75 +2061,80 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Provide your Google Generative AI API key for intelligent conversational queries against stored documents.',
+                'Assign a trusted beneficiary or legal executor to inherit critical documents and emergency records.',
                 style: TextStyle(
                   fontSize: 13,
                   color: isDark ? AppColors.darkMuted : AppColors.muted,
                 ),
               ),
               const SizedBox(height: 14),
-              TextField(
-                controller: _geminiKeyController,
-                obscureText: !_isGeminiKeyVisible,
-                decoration: InputDecoration(
-                  labelText: 'Gemini API Key',
-                  hintText: 'AIzaSy...',
-                  prefixIcon: const Icon(Icons.key_outlined),
-                  suffixIcon: IconButton(
-                    icon: Icon(_isGeminiKeyVisible
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined),
-                    onPressed: () => setState(
-                        () => _isGeminiKeyVisible = !_isGeminiKeyVisible),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
+                    flex: 2,
+                    child: TextField(
+                      controller: _trusteeNameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Trustee / Executor Full Name',
+                        prefixIcon: Icon(Icons.person_pin_rounded),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
                     child: DropdownButtonFormField<String>(
                       isExpanded: true,
-                      initialValue: _selectedGeminiModel,
+                      initialValue: _trusteeRelationships.contains(
+                              _trusteeRelationshipController.text)
+                          ? _trusteeRelationshipController.text
+                          : _trusteeRelationships.first,
                       decoration: const InputDecoration(
-                        labelText: 'Gemini Foundation Model',
-                        prefixIcon: Icon(Icons.psychology_outlined),
+                        labelText: 'Relationship',
+                        prefixIcon: Icon(Icons.handshake_outlined),
                       ),
-                      items: _geminiModels
-                          .map((m) => DropdownMenuItem(
-                                value: m,
-                                child: Text(m),
+                      items: _trusteeRelationships
+                          .map((rel) => DropdownMenuItem(
+                                value: rel,
+                                child: Text(rel, overflow: TextOverflow.ellipsis),
                               ))
                           .toList(),
                       onChanged: (val) {
-                        if (val != null) setState(() => _selectedGeminiModel = val);
+                        if (val != null) {
+                          setState(() {
+                            _trusteeRelationshipController.text = val;
+                          });
+                        }
                       },
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               Row(
                 children: [
-                  FilledButton.tonal(
-                    onPressed: _isTestingGemini ? null : _testGeminiConnection,
-                    child: Text(
-                      _isTestingGemini ? 'Testing Key...' : 'Test AI Connection',
+                  Expanded(
+                    child: TextField(
+                      controller: _trusteeEmailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(
+                        labelText: 'Trustee Email Address',
+                        prefixIcon: Icon(Icons.email_outlined),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _trusteePhoneController,
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(
+                        labelText: 'Trustee Phone Number',
+                        prefixIcon: Icon(Icons.phone_outlined),
+                      ),
                     ),
                   ),
                 ],
               ),
-              if (_geminiTestStatus != null) ...[
-                const SizedBox(height: 10),
-                Text(
-                  _geminiTestStatus!,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.mint,
-                  ),
-                ),
-              ],
             ],
           ),
         ),
@@ -2084,7 +2154,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(
-                      Icons.cloud_sync_outlined,
+                      Icons.timer_outlined,
                       color: AppColors.mint,
                       size: 20,
                     ),
@@ -2092,7 +2162,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                   const SizedBox(width: 12),
                   const Expanded(
                     child: Text(
-                      'MongoDB Atlas Encrypted Sync',
+                      'Vault Inactivity & Emergency Protocol',
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w900,
@@ -2103,47 +2173,60 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Synchronize encrypted document and receipt metadata with your private MongoDB Atlas cluster.',
+                'Configure automated inactivity check-ins. If no logins occur within the window, designated emergency safeguards activate.',
                 style: TextStyle(
                   fontSize: 13,
                   color: isDark ? AppColors.darkMuted : AppColors.muted,
                 ),
               ),
               const SizedBox(height: 14),
-              TextField(
-                controller: _mongoUriController,
+              DropdownButtonFormField<int>(
+                isExpanded: true,
+                initialValue: _selectedInactivityDays,
                 decoration: const InputDecoration(
-                  labelText: 'MongoDB Atlas URI',
-                  hintText: 'mongodb+srv://user:pass@cluster.mongodb.net',
-                  prefixIcon: Icon(Icons.link_rounded),
+                  labelText: 'Inactivity Threshold Window',
+                  prefixIcon: Icon(Icons.history_toggle_off_rounded),
                 ),
+                items: _inactivityOptions
+                    .map((days) => DropdownMenuItem(
+                          value: days,
+                          child: Text('$days Days Inactivity Window'),
+                        ))
+                    .toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() => _selectedInactivityDays = val);
+                  }
+                },
               ),
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  FilledButton.tonal(
-                    onPressed: _isTestingMongo ? null : _testMongoConnection,
-                    child: Text(
-                      _isTestingMongo
-                          ? 'Testing Connection...'
-                          : 'Test Connection & Sync',
-                    ),
-                  ),
-                ],
-              ),
-              if (_mongoTestStatus != null) ...[
-                const SizedBox(height: 10),
-                Text(
-                  _mongoTestStatus!,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: _mongoTestStatus!.contains('Successfully')
-                        ? AppColors.mint
-                        : AppColors.coral,
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.mint.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.mint.withValues(alpha: 0.3),
                   ),
                 ),
-              ],
+                child: Row(
+                  children: [
+                    const Icon(Icons.shield_outlined,
+                        color: AppColors.mint, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Protocol Status: Active Protection. Vault will generate emergency manifest after $_selectedInactivityDays days without check-in.',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.mint,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -2154,34 +2237,67 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Encrypted Backup Export / Import',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.coral.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.note_alt_outlined,
+                      color: AppColors.coral,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Legacy Instructions & Emergency Export',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
               Text(
-                'Create portable zero-knowledge backup archives or restore previous records.',
+                'Write confidential notes for your trustee. Download zero-knowledge backups or digital legacy packets.',
                 style: TextStyle(
                   fontSize: 13,
                   color: isDark ? AppColors.darkMuted : AppColors.muted,
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _legacyInstructionController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Encrypted Trustee Instruction Memo',
+                  hintText:
+                      'Provide instructions for accessing physical safe boxes, legal documents, or emergency keys...',
+                  prefixIcon: Icon(Icons.lock_clock_outlined),
                 ),
               ),
               const SizedBox(height: 16),
               Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _exportBackupModal,
-                      icon: const Icon(Icons.upload_rounded, size: 18),
-                      label: const Text('Export Backup'),
+                    child: FilledButton.tonalIcon(
+                      onPressed: _exportDigitalLegacyModal,
+                      icon: const Icon(Icons.gavel_rounded, size: 18),
+                      label: const Text('Export Legacy Packet'),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: _importBackupModal,
-                      icon: const Icon(Icons.download_rounded, size: 18),
-                      label: const Text('Restore Backup'),
+                      onPressed: _exportBackupModal,
+                      icon: const Icon(Icons.upload_rounded, size: 18),
+                      label: const Text('Export Full Backup'),
                     ),
                   ),
                 ],
@@ -2390,6 +2506,26 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                 label: 'App Build',
                 value: 'LifeVault Pro v2.4.0 (Offline First)',
                 isDark: isDark,
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _exportBackupModal,
+                      icon: const Icon(Icons.upload_file_rounded, size: 16),
+                      label: const Text('Backup Vault'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _importBackupModal,
+                      icon: const Icon(Icons.download_rounded, size: 16),
+                      label: const Text('Restore Backup'),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

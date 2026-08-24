@@ -562,7 +562,8 @@ class VaultState extends ChangeNotifier {
       rawOcrText:
           'Store: ${receipt.storeName}\nDate: ${receipt.purchaseDate}\nTotal: ${formatSpend(receipt.totalAmount, decimals: 2)}',
       attachmentBytesBase64: receipt.attachmentBytesBase64,
-      attachmentFileName: receipt.attachmentFileName ?? 'receipt_${receipt.id.substring(0, 8)}.jpg',
+      attachmentFileName: receipt.attachmentFileName ??
+          'receipt_${receipt.id.length > 8 ? receipt.id.substring(0, 8) : receipt.id}.jpg',
       attachmentType: receipt.attachmentType ?? 'image/jpeg',
     );
     _documents.insert(0, doc);

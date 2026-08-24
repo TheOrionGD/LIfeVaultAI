@@ -55,6 +55,12 @@ class UserProfile {
     this.usePasswordMode = false,
     this.huggingFaceApiKey = '',
     this.sttEnginePreference = 'whisper',
+    this.trusteeName = '',
+    this.trusteeEmail = '',
+    this.trusteePhone = '',
+    this.trusteeRelationship = 'Designated Trustee',
+    this.legacyInstruction = '',
+    this.inactivityDays = 90,
   });
 
   final String name;
@@ -108,6 +114,12 @@ class UserProfile {
   final bool usePasswordMode;
   final String huggingFaceApiKey;
   final String sttEnginePreference;
+  final String trusteeName;
+  final String trusteeEmail;
+  final String trusteePhone;
+  final String trusteeRelationship;
+  final String legacyInstruction;
+  final int inactivityDays;
 
   bool get hasName => name.trim().isNotEmpty;
 
@@ -215,6 +227,12 @@ class UserProfile {
     bool? usePasswordMode,
     String? huggingFaceApiKey,
     String? sttEnginePreference,
+    String? trusteeName,
+    String? trusteeEmail,
+    String? trusteePhone,
+    String? trusteeRelationship,
+    String? legacyInstruction,
+    int? inactivityDays,
   }) {
     return UserProfile(
       name: name ?? this.name,
@@ -274,6 +292,12 @@ class UserProfile {
       usePasswordMode: usePasswordMode ?? this.usePasswordMode,
       huggingFaceApiKey: huggingFaceApiKey ?? this.huggingFaceApiKey,
       sttEnginePreference: sttEnginePreference ?? this.sttEnginePreference,
+      trusteeName: trusteeName ?? this.trusteeName,
+      trusteeEmail: trusteeEmail ?? this.trusteeEmail,
+      trusteePhone: trusteePhone ?? this.trusteePhone,
+      trusteeRelationship: trusteeRelationship ?? this.trusteeRelationship,
+      legacyInstruction: legacyInstruction ?? this.legacyInstruction,
+      inactivityDays: inactivityDays ?? this.inactivityDays,
     );
   }
 
@@ -329,6 +353,12 @@ class UserProfile {
         'usePasswordMode': usePasswordMode,
         'huggingFaceApiKey': huggingFaceApiKey,
         'sttEnginePreference': sttEnginePreference,
+        'trusteeName': trusteeName,
+        'trusteeEmail': trusteeEmail,
+        'trusteePhone': trusteePhone,
+        'trusteeRelationship': trusteeRelationship,
+        'legacyInstruction': legacyInstruction,
+        'inactivityDays': inactivityDays,
       };
 
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
@@ -395,5 +425,12 @@ class UserProfile {
         huggingFaceApiKey: json['huggingFaceApiKey'] as String? ?? '',
         sttEnginePreference:
             json['sttEnginePreference'] as String? ?? 'whisper',
+        trusteeName: json['trusteeName'] as String? ?? '',
+        trusteeEmail: json['trusteeEmail'] as String? ?? '',
+        trusteePhone: json['trusteePhone'] as String? ?? '',
+        trusteeRelationship:
+            json['trusteeRelationship'] as String? ?? 'Designated Trustee',
+        legacyInstruction: json['legacyInstruction'] as String? ?? '',
+        inactivityDays: json['inactivityDays'] as int? ?? 90,
       );
 }

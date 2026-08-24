@@ -686,6 +686,7 @@ class _ScanDocumentScreenState extends State<ScanDocumentScreen> {
                             final name = _pickedFileName ?? 'scanned_doc_${DateTime.now().millisecondsSinceEpoch}.jpg';
                             final b64 = _pickedImageBytes != null ? base64Encode(_pickedImageBytes!) : null;
 
+                            final messenger = ScaffoldMessenger.of(context);
                             final result = await PlatformAudioDownloadHelper.downloadFile(
                               fileName: name,
                               base64Data: b64,
@@ -695,7 +696,7 @@ class _ScanDocumentScreenState extends State<ScanDocumentScreen> {
 
                             if (!mounted) return;
 
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            messenger.showSnackBar(
                               SnackBar(
                                 content: Text(
                                   result.success

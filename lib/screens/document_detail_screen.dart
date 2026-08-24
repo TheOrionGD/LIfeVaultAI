@@ -476,6 +476,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                       title: _doc.title,
                       durationSeconds: 20,
                       audioBytesBase64: _doc.attachmentBytesBase64,
+                      transcript: _doc.rawOcrText.isNotEmpty ? _doc.rawOcrText : _doc.notes,
                       fileName: _doc.attachmentFileName ?? '${_doc.title}.wav',
                       category: 'Voice Memo',
                     ),
@@ -600,6 +601,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
 
                                   final textContent = 'LifeVault Document: ${_doc.title}\nCategory: ${_doc.category}\nDetails: ${_doc.detail}\nNotes: ${_doc.notes}';
 
+                                  final messenger = ScaffoldMessenger.of(context);
                                   final result = await PlatformAudioDownloadHelper.downloadFile(
                                     fileName: fileName,
                                     base64Data: b64,
@@ -609,7 +611,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
 
                                   if (!mounted) return;
 
-                                  ScaffoldMessenger.of(context).showSnackBar(
+                                  messenger.showSnackBar(
                                     SnackBar(
                                       content: Text(
                                         result.success
@@ -754,6 +756,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                             final fileName = _doc.attachmentFileName ?? '${_doc.title.replaceAll(" ", "_")}.txt';
                             final shareText = 'LifeVault Vault Record: "${_doc.title}"\nCategory: ${_doc.category}\nIssue Date: ${_doc.issueDate != null ? DateFormatter.formatFull(_doc.issueDate!) : "N/A"}\nDetails: ${_doc.detail}\nNotes: ${_doc.notes}\nOCR Text: ${_doc.rawOcrText}';
 
+                            final messenger = ScaffoldMessenger.of(context);
                             final success = await PlatformAudioDownloadHelper.shareContent(
                               title: 'LifeVault Record: ${_doc.title}',
                               text: shareText,
@@ -763,7 +766,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
 
                             if (!mounted) return;
 
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            messenger.showSnackBar(
                               SnackBar(
                                 content: Text(
                                   success

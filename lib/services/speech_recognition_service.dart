@@ -4,6 +4,7 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
 import 'gemini_ai_service.dart';
+import 'speech_to_text_converter.dart';
 
 typedef SpeechResultCallback = void Function(String text, bool isFinal);
 typedef AudioAmplitudeCallback = void Function(double amplitude);
@@ -48,7 +49,10 @@ class SpeechRecognitionService {
           debugPrint('Speech engine status: $status');
           if (status == 'notListening' || status == 'done') {
             if (_isListening && !_isDisposed) {
-              // Session closed or paused
+              // Session paused or completed by engine - restart for continuous recording
+              Future.delayed(const Duration(milliseconds: 150), () {
+                _restartListenSession();
+              });
             }
           }
         },
@@ -57,6 +61,38 @@ class SpeechRecognitionService {
     } catch (e) {
       debugPrint('Speech initialization note: $e');
       return false;
+    }
+  }
+
+  Future<void> _restartListenSession() async {
+    if (!_isListening || _isDisposed || _speech.isListening) return;
+    try {
+      if (_speech.isAvailable) {
+        await _speech.listen(
+          onResult: (SpeechRecognitionResult result) {
+            if (_isDisposed || !_isListening) return;
+            if (result.recognizedWords.isNotEmpty) {
+              _accumulatedText = result.recognizedWords;
+              onResult?.call(_accumulatedText, result.finalResult);
+            }
+          },
+          onSoundLevelChange: (double level) {
+            if (_isDisposed || !_isListening) return;
+            final normalized = ((level + 5) / 15).clamp(0.15, 1.0);
+            _currentAmplitude = normalized;
+            onAmplitude?.call(normalized);
+          },
+          listenOptions: stt.SpeechListenOptions(
+            listenFor: const Duration(minutes: 5),
+            pauseFor: const Duration(seconds: 4),
+            partialResults: true,
+            cancelOnError: false,
+            listenMode: stt.ListenMode.dictation,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Speech restart note: $e');
     }
   }
 
@@ -73,13 +109,14 @@ class SpeechRecognitionService {
       if (isAvailable && _speech.isAvailable) {
         await _speech.listen(
           onResult: (SpeechRecognitionResult result) {
-            if (_isDisposed) return;
-            _accumulatedText = result.recognizedWords;
-            onResult?.call(_accumulatedText, result.finalResult);
+            if (_isDisposed || !_isListening) return;
+            if (result.recognizedWords.isNotEmpty) {
+              _accumulatedText = result.recognizedWords;
+              onResult?.call(_accumulatedText, result.finalResult);
+            }
           },
           onSoundLevelChange: (double level) {
-            if (_isDisposed) return;
-            // Normalize level (typically in dB from -10 to 10 or 0 to 10)
+            if (_isDisposed || !_isListening) return;
             final normalized = ((level + 5) / 15).clamp(0.15, 1.0);
             _currentAmplitude = normalized;
             onAmplitude?.call(normalized);
@@ -130,6 +167,17 @@ class SpeechRecognitionService {
     String? geminiApiKey,
     String enginePreference = 'gemini',
   }) async {
+    final convertedText = await SpeechToTextConverter.convertSpeechToText(
+      audioBytes: audioBytes,
+      fileName: fileName,
+      customApiKey: geminiApiKey,
+      hfApiKey: hfApiKey,
+      engine: enginePreference,
+    );
+    if (convertedText != null && convertedText.trim().isNotEmpty) {
+      return convertedText.trim();
+    }
+
     String mime = 'audio/wav';
     final lower = fileName.toLowerCase();
     if (lower.endsWith('.mp3')) mime = 'audio/mp3';

@@ -128,8 +128,8 @@ abstract final class AppTheme {
       fontFamily: 'Segoe UI',
       extensions: [extension],
       colorScheme: ColorScheme.light(
-        primary: AppColors.ink,
-        onPrimary: AppColors.surface,
+        primary: accent,
+        onPrimary: Colors.white,
         secondary: accent,
         onSecondary: Colors.white,
         tertiary: AppColors.mint,
@@ -160,8 +160,8 @@ abstract final class AppTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: AppColors.ink,
-          foregroundColor: AppColors.surface,
+          backgroundColor: accent,
+          foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
@@ -207,14 +207,16 @@ abstract final class AppTheme {
       ),
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.surfaceSubtle,
-        selectedColor: AppColors.ink,
-        secondarySelectedColor: AppColors.ink,
+        selectedColor: accent,
+        secondarySelectedColor: accent,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),
           side: BorderSide.none,
         ),
-        labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5),
+        labelStyle: const TextStyle(color: AppColors.ink, fontWeight: FontWeight.w600, fontSize: 12.5),
+        secondaryLabelStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12.5),
+        brightness: Brightness.light,
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: AppColors.surface,

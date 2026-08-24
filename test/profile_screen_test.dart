@@ -130,7 +130,7 @@ void main() {
       expect(find.text('Personal & Bio'), findsOneWidget);
       expect(find.text('Emergency & ICE'), findsOneWidget);
       expect(find.text('Security & Access'), findsOneWidget);
-      expect(find.text('AI & Cloud Sync'), findsOneWidget);
+      expect(find.text('Digital Legacy & Estate'), findsOneWidget);
       expect(find.text('Preferences'), findsOneWidget);
 
       // Tap Emergency & ICE tab
