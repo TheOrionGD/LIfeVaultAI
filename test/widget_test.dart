@@ -19,6 +19,7 @@ void main() {
       storageService: LocalStorageService(populateDefaults: false),
     );
     await vaultState.initialize();
+    await vaultState.completeOnboarding();
     vaultState.unlockVault();
 
     // Verify initial empty state

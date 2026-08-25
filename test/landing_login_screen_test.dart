@@ -12,8 +12,8 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  group('LandingLoginScreen YONO SBI Style Suite Tests', () {
-    testWidgets('Renders YONO header, greeting, biometric viewfinder, and quick tiles', (tester) async {
+  group('LandingLoginScreen Suite Tests', () {
+    testWidgets('Renders header, greeting, biometric viewfinder, and quick tiles', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -37,7 +37,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // SBI YONO Brand Identity checks
+      // Brand Identity checks
       expect(find.text('lifevault'), findsOneWidget);
       expect(find.text('Hello'), findsOneWidget);
       expect(find.text('Godfrey'), findsOneWidget);

@@ -61,7 +61,10 @@ class UserProfile {
     this.trusteeRelationship = 'Designated Trustee',
     this.legacyInstruction = '',
     this.inactivityDays = 90,
+    this.hasCompletedOnboarding = false,
   });
+
+  final bool hasCompletedOnboarding;
 
   final String name;
   final String email;
@@ -233,6 +236,7 @@ class UserProfile {
     String? trusteeRelationship,
     String? legacyInstruction,
     int? inactivityDays,
+    bool? hasCompletedOnboarding,
   }) {
     return UserProfile(
       name: name ?? this.name,
@@ -298,6 +302,8 @@ class UserProfile {
       trusteeRelationship: trusteeRelationship ?? this.trusteeRelationship,
       legacyInstruction: legacyInstruction ?? this.legacyInstruction,
       inactivityDays: inactivityDays ?? this.inactivityDays,
+      hasCompletedOnboarding:
+          hasCompletedOnboarding ?? this.hasCompletedOnboarding,
     );
   }
 
@@ -359,6 +365,7 @@ class UserProfile {
         'trusteeRelationship': trusteeRelationship,
         'legacyInstruction': legacyInstruction,
         'inactivityDays': inactivityDays,
+        'hasCompletedOnboarding': hasCompletedOnboarding,
       };
 
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
@@ -432,5 +439,7 @@ class UserProfile {
             json['trusteeRelationship'] as String? ?? 'Designated Trustee',
         legacyInstruction: json['legacyInstruction'] as String? ?? '',
         inactivityDays: json['inactivityDays'] as int? ?? 90,
+        hasCompletedOnboarding:
+            json['hasCompletedOnboarding'] as bool? ?? false,
       );
 }

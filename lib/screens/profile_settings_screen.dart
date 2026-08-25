@@ -14,6 +14,7 @@ import 'emergency_card_screen.dart';
 import 'vault_rewards_screen.dart';
 import 'vault_analytics_screen.dart';
 import 'landing_login_screen.dart';
+import 'onboarding_screen.dart';
 
 class ProfileSettingsScreen extends StatefulWidget {
   const ProfileSettingsScreen({
@@ -2504,7 +2505,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               ),
               _buildInfoRow(
                 label: 'App Build',
-                value: 'LifeVault Pro v2.4.0 (Offline First)',
+                value: 'LifeVault AI v2.1.4 (Zero-Knowledge)',
                 isDark: isDark,
               ),
               const SizedBox(height: 12),
@@ -2526,6 +2527,25 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.tonalIcon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      VaultFadeSlideRoute(
+                        builder: (_) => OnboardingScreen(
+                          vaultState: widget.vaultState,
+                          onCompleted: () => Navigator.pop(context),
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.auto_stories_rounded, size: 16),
+                  label: const Text('Explore All 14 Features (App Tour)'),
+                ),
               ),
             ],
           ),

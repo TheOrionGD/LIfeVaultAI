@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'core/theme/app_theme.dart';
 import 'screens/splash_screen.dart';
+import 'screens/onboarding_screen.dart';
 import 'screens/landing_login_screen.dart';
 import 'screens/main_shell_screen.dart';
 import 'state/vault_state.dart';
@@ -57,6 +58,10 @@ class LifeVaultApp extends StatelessWidget {
           themeMode: vaultState.isDarkMode ? ThemeMode.dark : ThemeMode.light,
           home: LifeVaultRoot(vaultState: vaultState),
           routes: {
+            '/onboarding': (_) => OnboardingScreen(
+                  vaultState: vaultState,
+                  onCompleted: () => Navigator.pop(context),
+                ),
             '/landing': (_) => LandingLoginScreen(
                   vaultState: vaultState,
                   onSuccess: () => vaultState.unlockVault(),
@@ -93,6 +98,7 @@ class _LifeVaultRootState extends State<LifeVaultRoot> {
     return ListenableBuilder(
       listenable: widget.vaultState,
       builder: (context, _) {
+        // Step 1: Splash Screen animation
         if (_showSplash) {
           return SplashScreen(
             key: const ValueKey('splash_screen'),
@@ -107,6 +113,18 @@ class _LifeVaultRootState extends State<LifeVaultRoot> {
           );
         }
 
+        // Step 2: If onboarding hasn't been completed, show 14-slide Onboarding Screen
+        if (!widget.vaultState.hasCompletedOnboarding) {
+          return OnboardingScreen(
+            key: const ValueKey('onboarding_screen'),
+            vaultState: widget.vaultState,
+            onCompleted: () {
+              widget.vaultState.completeOnboarding(context: context);
+            },
+          );
+        }
+
+        // Step 3: If vault is locked, show Landing / Login Screen
         if (!widget.vaultState.isUnlocked) {
           return LandingLoginScreen(
             key: const ValueKey('landing_login_screen'),
@@ -117,6 +135,7 @@ class _LifeVaultRootState extends State<LifeVaultRoot> {
           );
         }
 
+        // Step 4: Vault Unlocked -> Main Shell Screen
         return MainShellScreen(
           key: const ValueKey('main_shell_screen'),
           vaultState: widget.vaultState,

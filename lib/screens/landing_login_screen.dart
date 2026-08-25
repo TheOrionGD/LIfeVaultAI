@@ -12,11 +12,12 @@ import '../core/widgets/stacked_feature_card_deck.dart';
 import '../services/biometric_filter_service.dart';
 import '../state/vault_state.dart';
 import 'emergency_card_screen.dart';
+import 'onboarding_screen.dart';
 import 'scan_document_screen.dart';
 import 'vault_audit_screen.dart';
 import 'vault_analytics_screen.dart';
 
-/// YONO-SBI inspired Landing & Authentication Page for LifeVault
+/// Luxury Modern Landing & Authentication Page for LifeVault
 class LandingLoginScreen extends StatefulWidget {
   const LandingLoginScreen({
     super.key,
@@ -484,6 +485,35 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
                                         Navigator.push(
                                           context,
                                           VaultFadeSlideRoute(
+                                            builder: (_) => OnboardingScreen(
+                                              vaultState: widget.vaultState,
+                                              onCompleted: () =>
+                                                  Navigator.pop(context),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.all(5),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withValues(
+                                            alpha: 0.18,
+                                          ),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(
+                                          Icons.help_outline_rounded,
+                                          color: Colors.white,
+                                          size: 18,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    InkWell(
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          VaultFadeSlideRoute(
                                             builder: (_) => EmergencyCardScreen(
                                               vaultState: widget.vaultState,
                                             ),
@@ -576,7 +606,7 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
                   constraints: const BoxConstraints(maxWidth: 500),
                   child: Column(
                     children: [
-                      // Section 1: Elevated Main Biometric & Login Card (YONO SBI Style)
+                      // Section 1: Elevated Main Biometric & Login Card
                       SlideTransition(
                         position: _getSlide(0.0, 0.4),
                         child: FadeTransition(
@@ -601,6 +631,8 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
                               children: [
                                 // Biometric Target Frame Box [ (o) ]
                                 GestureDetector(
+                                  key: const ValueKey(
+                                      'landing_biometric_viewfinder'),
                                   onTap: () => _triggerBiometricAuth(bioResult),
                                   child: ScaleTransition(
                                     scale: _pulseAnimation,
@@ -871,7 +903,7 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
                                 const Divider(height: 1),
                                 const SizedBox(height: 14),
 
-                                // 4 Quick Companion Services (YONO Style)
+                                // 4 Quick Companion Services
                                 Row(
                                   children: [
                                     Expanded(
@@ -1198,7 +1230,7 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
 
                       const SizedBox(height: 20),
 
-                      // Section 5: Cyber Safety Awareness Banner Card (YONO Style)
+                      // Section 5: Cyber Safety Awareness Banner Card
                       SlideTransition(
                         position: _getSlide(0.3, 0.7),
                         child: FadeTransition(
@@ -1403,7 +1435,7 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
             ),
           ),
 
-          // Bottom Fixed YONO Bar with Floating QR/Scan Action
+          // Bottom Fixed Action Bar with Floating QR/Scan Action
           Positioned(
             left: 0,
             right: 0,
@@ -1862,7 +1894,7 @@ class _BiometricAuthSheetState extends State<_BiometricAuthSheet>
 
           const SizedBox(height: 10),
 
-          // App Logo Pill (YONO style)
+          // App Logo Pill
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(

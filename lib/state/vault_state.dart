@@ -99,6 +99,7 @@ class VaultState extends ChangeNotifier {
   VaultSortOrder get sortOrder => _sortOrder;
   bool get isAiThinking => _isAiThinking;
   bool get isUnlocked => _security.isUnlocked;
+  bool get hasCompletedOnboarding => _userProfile.hasCompletedOnboarding;
 
   List<VaultDocument> get documents => List.unmodifiable(_documents);
   List<ReceiptRecord> get receipts => List.unmodifiable(_receipts);
@@ -774,6 +775,30 @@ class VaultState extends ChangeNotifier {
         context: context,
       );
     }
+    await _storage.saveUserProfile(_userProfile);
+    notifyListeners();
+  }
+
+  /// Marks onboarding walkthrough as completed and awards initial XP milestone
+  Future<void> completeOnboarding({BuildContext? context}) async {
+    if (!_userProfile.hasCompletedOnboarding) {
+      _userProfile = _userProfile.copyWith(hasCompletedOnboarding: true);
+      _awardXp(
+        50,
+        title: 'Vault Tour Completed!',
+        description: 'Welcome to LifeVault AI! You have earned 50 XP as an initiated Security Guardian.',
+        context: null,
+      );
+    } else {
+      _userProfile = _userProfile.copyWith(hasCompletedOnboarding: true);
+      await _storage.saveUserProfile(_userProfile);
+      notifyListeners();
+    }
+  }
+
+  /// Resets onboarding status for replay / development testing
+  Future<void> resetOnboarding() async {
+    _userProfile = _userProfile.copyWith(hasCompletedOnboarding: false);
     await _storage.saveUserProfile(_userProfile);
     notifyListeners();
   }

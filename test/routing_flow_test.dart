@@ -14,7 +14,7 @@ void main() {
   });
 
   group('Full Application Routing & Transition Lifecycle Tests', () {
-    testWidgets('Complete Flow: Splash -> YONO Landing Page -> Biometric Unlock -> Home Dashboard -> Lock', (tester) async {
+    testWidgets('Complete Flow: Splash -> Landing Page -> Biometric Unlock -> Home Dashboard -> Lock', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -33,19 +33,27 @@ void main() {
       expect(find.byType(SplashScreen), findsOneWidget);
       expect(find.text('AI-POWERED PRIVACY VAULT'), findsOneWidget);
 
-      // 2. Advance time past splash duration (2.2s)
-      await tester.pump(const Duration(milliseconds: 2300));
+      // 2. Advance time past splash duration (2.7s)
+      await tester.pump(const Duration(milliseconds: 2800));
       await tester.pumpAndSettle();
 
-      // 3. Routed to LandingLoginScreen (YONO SBI Style)
+      // 3. Routed to OnboardingScreen (14-slide Tour)
+      expect(find.text('v2.1.4 Tour'), findsOneWidget);
+      expect(find.text('Next Feature'), findsOneWidget);
+
+      // Skip/Finish Onboarding to reach Landing Screen
+      await tester.tap(find.text('Skip'));
+      await tester.pump(const Duration(milliseconds: 1200));
+      await tester.pumpAndSettle();
+
+      // 4. Routed to LandingLoginScreen
       expect(find.byType(LandingLoginScreen), findsOneWidget);
       expect(find.text('1 device active'), findsOneWidget);
       expect(find.text('View Balance & Summary'), findsOneWidget);
 
       // 4. Authenticate via biometric target box
-      await tester.tap(find.byWidgetPredicate(
-        (w) => w is Icon && w.icon == Icons.fingerprint_rounded && w.size == 56.0,
-      ));
+      await tester.tap(find.byKey(const ValueKey('landing_biometric_viewfinder')));
+      await tester.pump(const Duration(milliseconds: 600));
       await tester.pumpAndSettle();
 
       // Modal Master Auth Dialog opens
