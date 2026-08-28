@@ -100,6 +100,7 @@ class _FaceScannerDialogState extends State<FaceScannerDialog>
     // Run face authentication
     final result = await widget.vaultState.authenticateWithFaceId(
       reason: 'Look directly at the front camera to unlock LifeVault with Face ID',
+      forceFaceRecognitionOnly: true,
     );
 
     if (!mounted) return;

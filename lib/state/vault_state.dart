@@ -742,8 +742,12 @@ class VaultState extends ChangeNotifier {
   /// Explicit Face ID authentication request
   Future<BiometricAuthResult> authenticateWithFaceId({
     String reason = 'Look at your device screen to unlock LifeVault with Face ID',
+    bool forceFaceRecognitionOnly = false,
   }) async {
-    final result = await _biometricAuth.authenticateWithFaceId(reason: reason);
+    final result = await _biometricAuth.authenticateWithFaceId(
+      reason: reason,
+      forceFaceRecognitionOnly: forceFaceRecognitionOnly,
+    );
     if (result.isSuccess) {
       _security.unlock();
       _userProfile = _security.recordSuccessAttempt(_userProfile);

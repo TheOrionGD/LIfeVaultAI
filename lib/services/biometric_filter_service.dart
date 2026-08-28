@@ -107,7 +107,8 @@ class BiometricFilterService {
 
     // Determine primary display type
     BiometricHardwareType primary;
-    if (preferredType == 'face' && filtered.contains(BiometricHardwareType.face)) {
+    if ((preferredType == 'face' || preferredType == 'both' || policy == BiometricFilterPolicy.faceOnly) &&
+        filtered.contains(BiometricHardwareType.face)) {
       primary = BiometricHardwareType.face;
     } else if (preferredType == 'fingerprint' && filtered.contains(BiometricHardwareType.fingerprint)) {
       primary = BiometricHardwareType.fingerprint;
