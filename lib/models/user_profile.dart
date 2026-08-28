@@ -62,7 +62,14 @@ class UserProfile {
     this.legacyInstruction = '',
     this.inactivityDays = 90,
     this.hasCompletedOnboarding = false,
+    this.lastKnownLatitude = 0.0,
+    this.lastKnownLongitude = 0.0,
+    this.lastLocationTimestamp = '',
   });
+
+  final double lastKnownLatitude;
+  final double lastKnownLongitude;
+  final String lastLocationTimestamp;
 
   final bool hasCompletedOnboarding;
 
@@ -237,6 +244,9 @@ class UserProfile {
     String? legacyInstruction,
     int? inactivityDays,
     bool? hasCompletedOnboarding,
+    double? lastKnownLatitude,
+    double? lastKnownLongitude,
+    String? lastLocationTimestamp,
   }) {
     return UserProfile(
       name: name ?? this.name,
@@ -304,6 +314,10 @@ class UserProfile {
       inactivityDays: inactivityDays ?? this.inactivityDays,
       hasCompletedOnboarding:
           hasCompletedOnboarding ?? this.hasCompletedOnboarding,
+      lastKnownLatitude: lastKnownLatitude ?? this.lastKnownLatitude,
+      lastKnownLongitude: lastKnownLongitude ?? this.lastKnownLongitude,
+      lastLocationTimestamp:
+          lastLocationTimestamp ?? this.lastLocationTimestamp,
     );
   }
 
@@ -366,6 +380,9 @@ class UserProfile {
         'legacyInstruction': legacyInstruction,
         'inactivityDays': inactivityDays,
         'hasCompletedOnboarding': hasCompletedOnboarding,
+        'lastKnownLatitude': lastKnownLatitude,
+        'lastKnownLongitude': lastKnownLongitude,
+        'lastLocationTimestamp': lastLocationTimestamp,
       };
 
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
@@ -441,5 +458,11 @@ class UserProfile {
         inactivityDays: json['inactivityDays'] as int? ?? 90,
         hasCompletedOnboarding:
             json['hasCompletedOnboarding'] as bool? ?? false,
+        lastKnownLatitude:
+            (json['lastKnownLatitude'] as num?)?.toDouble() ?? 0.0,
+        lastKnownLongitude:
+            (json['lastKnownLongitude'] as num?)?.toDouble() ?? 0.0,
+        lastLocationTimestamp:
+            json['lastLocationTimestamp'] as String? ?? '',
       );
 }

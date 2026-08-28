@@ -5,10 +5,15 @@ import 'screens/splash_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/landing_login_screen.dart';
 import 'screens/main_shell_screen.dart';
+import 'services/notification_service.dart';
 import 'state/vault_state.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize local notifications service for lock screen and notification tray alerts
+  await NotificationService().init();
+
   final vaultState = VaultState();
   await vaultState.initialize();
 
@@ -83,14 +88,54 @@ class LifeVaultRoot extends StatefulWidget {
   State<LifeVaultRoot> createState() => _LifeVaultRootState();
 }
 
-class _LifeVaultRootState extends State<LifeVaultRoot> {
+class _LifeVaultRootState extends State<LifeVaultRoot> with WidgetsBindingObserver {
   static bool _globalSplashShown = false;
   late bool _showSplash;
+  DateTime? _backgroundTimestamp;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _showSplash = !_globalSplashShown && !widget.vaultState.isUnlocked;
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden) {
+      // App switched away or closed to background
+      _backgroundTimestamp = DateTime.now();
+    } else if (state == AppLifecycleState.resumed) {
+      // User returns to app from background or another app
+      if (_backgroundTimestamp != null) {
+        final elapsedSeconds =
+            DateTime.now().difference(_backgroundTimestamp!).inSeconds;
+        final autoLockMinutes =
+            widget.vaultState.userProfile.autoLockMinutes;
+
+        // Auto-lock condition:
+        // If set to Immediate (0 min) or grace threshold elapsed (e.g. >= autoLockMinutes * 60, or >= 3 seconds when set to immediate)
+        final thresholdSeconds = autoLockMinutes == 0 ? 1 : autoLockMinutes * 60;
+
+        if (elapsedSeconds >= thresholdSeconds) {
+          if (widget.vaultState.isUnlocked) {
+            debugPrint('[LifeVault Security] Auto-locking vault after $elapsedSeconds s in background.');
+            widget.vaultState.lockVault();
+          }
+        }
+      }
+      _backgroundTimestamp = null;
+    }
   }
 
   @override

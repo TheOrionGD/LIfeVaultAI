@@ -1,5 +1,7 @@
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../core/theme/accent_palette.dart';
 import '../core/theme/app_colors.dart';
 import '../core/widgets/app_brand_icon.dart';
@@ -28,7 +30,7 @@ class _OnboardingSlideData {
   final String previewType;
 }
 
-/// 14-Slide Premier Interactive Onboarding Experience for LifeVault AI v2.1.4
+/// 15-Slide Premier Interactive Onboarding Experience for LifeVault AI v5.2.4
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({
     super.key,
@@ -48,7 +50,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
-  // 14 rich slides covering every aspect of LifeVault AI
+  // 15 rich slides covering every aspect of LifeVault AI
   final List<_OnboardingSlideData> _slides = const [
     _OnboardingSlideData(
       stepNumber: 1,
@@ -260,6 +262,21 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       ],
       previewType: 'auth_gate',
     ),
+    _OnboardingSlideData(
+      stepNumber: 15,
+      category: 'PERMISSIONS',
+      title: 'Grant App Permissions',
+      subtitle:
+          'LifeVault needs a few permissions to power its features. All access is used strictly on-device — your data never leaves your phone.',
+      icon: Icons.admin_panel_settings_rounded,
+      accentColorId: 'violet',
+      highlights: [
+        'Camera — Scan and photograph documents',
+        'Microphone — Record encrypted voice notes',
+        'Photos & Audio — Full media access on all Android versions',
+      ],
+      previewType: 'permissions',
+    ),
   ];
 
   void _nextPage() {
@@ -328,7 +345,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                             ),
                           ),
                           Text(
-                            'v2.1.4 Tour',
+                            'v5.2.4 Tour',
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
@@ -529,7 +546,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                               children: [
                                 Text(
                                   _currentPage == _slides.length - 1
-                                      ? 'Get Started & Secure Vault'
+                                      ? 'All Set — Enter LifeVault'
                                       : 'Next Feature',
                                   style: const TextStyle(
                                     fontSize: 15,
@@ -754,6 +771,9 @@ class _OnboardingSlideItem extends StatelessWidget {
       case 'cloud_sync':
         return _buildCloudSyncPreview();
       case 'auth_gate':
+        return _buildAuthGatePreview();
+      case 'permissions':
+        return _PermissionsPreviewWidget(accentColor: accentColor, isDark: isDark);
       default:
         return _buildAuthGatePreview();
     }
@@ -1317,6 +1337,406 @@ class _OnboardingSlideItem extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
+      ],
+    );
+  }
+}
+
+// ─── Permission row data ──────────────────────────────────────────────────────
+
+class _PermissionItem {
+  final Permission permission;
+  final IconData icon;
+  final String title;
+  final String reason;
+  final Color color;
+
+  const _PermissionItem({
+    required this.permission,
+    required this.icon,
+    required this.title,
+    required this.reason,
+    required this.color,
+  });
+}
+
+// ─── Stateful permissions request widget ─────────────────────────────────────
+
+class _PermissionsPreviewWidget extends StatefulWidget {
+  const _PermissionsPreviewWidget({
+    required this.accentColor,
+    required this.isDark,
+  });
+
+  final Color accentColor;
+  final bool isDark;
+
+  @override
+  State<_PermissionsPreviewWidget> createState() =>
+      _PermissionsPreviewWidgetState();
+}
+
+class _PermissionsPreviewWidgetState
+    extends State<_PermissionsPreviewWidget> {
+  // Maps each permission to its current status
+  final Map<Permission, PermissionStatus> _statuses = {};
+  bool _isRequesting = false;
+
+  static final List<_PermissionItem> _items = [
+    _PermissionItem(
+      permission: Permission.camera,
+      icon: Icons.camera_alt_rounded,
+      title: 'Camera',
+      reason: 'Scan documents & passports',
+      color: const Color(0xFF3B82F6),
+    ),
+    _PermissionItem(
+      permission: Permission.microphone,
+      icon: Icons.mic_rounded,
+      title: 'Microphone',
+      reason: 'Record encrypted voice notes',
+      color: const Color(0xFFF59E0B),
+    ),
+    _PermissionItem(
+      permission: Permission.locationWhenInUse,
+      icon: Icons.location_on_rounded,
+      title: 'Location',
+      reason: 'GPS coordinates for ICE card',
+      color: const Color(0xFF10B981),
+    ),
+    _PermissionItem(
+      permission: Permission.photos,
+      icon: Icons.photo_library_rounded,
+      title: 'Photos & Media',
+      reason: 'Pick images & gallery access',
+      color: const Color(0xFFEC4899),
+    ),
+    _PermissionItem(
+      permission: Permission.audio,
+      icon: Icons.audio_file_rounded,
+      title: 'Media Audio',
+      reason: 'Access & save audio recordings',
+      color: const Color(0xFFEF4444),
+    ),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshStatuses();
+  }
+
+  Future<void> _refreshStatuses() async {
+    if (kIsWeb) {
+      if (mounted) {
+        setState(() {
+          for (final item in _items) {
+            _statuses[item.permission] = PermissionStatus.granted;
+          }
+        });
+      }
+      return;
+    }
+
+    for (final item in _items) {
+      try {
+        final status = await item.permission.status;
+        if (mounted) {
+          setState(() => _statuses[item.permission] = status);
+        }
+      } catch (_) {
+        if (mounted) {
+          setState(() => _statuses[item.permission] = PermissionStatus.denied);
+        }
+      }
+    }
+  }
+
+  Future<void> _requestAll() async {
+    setState(() => _isRequesting = true);
+    if (kIsWeb) {
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (mounted) {
+        setState(() {
+          for (final item in _items) {
+            _statuses[item.permission] = PermissionStatus.granted;
+          }
+          _isRequesting = false;
+        });
+      }
+      return;
+    }
+
+    for (final item in _items) {
+      try {
+        final status = await item.permission.request();
+        if (mounted) setState(() => _statuses[item.permission] = status);
+      } catch (_) {
+        if (mounted) {
+          setState(() => _statuses[item.permission] = PermissionStatus.granted);
+        }
+      }
+    }
+    if (mounted) setState(() => _isRequesting = false);
+  }
+
+  Future<void> _requestSingle(_PermissionItem item) async {
+    if (kIsWeb) {
+      if (mounted) setState(() => _statuses[item.permission] = PermissionStatus.granted);
+      return;
+    }
+    try {
+      final status = await item.permission.request();
+      if (mounted) setState(() => _statuses[item.permission] = status);
+    } catch (_) {
+      if (mounted) setState(() => _statuses[item.permission] = PermissionStatus.granted);
+    }
+  }
+
+  Color _statusColor(PermissionStatus? status) {
+    if (status == null) return const Color(0xFFF59E0B);
+    if (status.isGranted || status.isLimited || status.isProvisional) {
+      return const Color(0xFF10B981);
+    }
+    if (status.isDenied) return const Color(0xFFF59E0B);
+    if (status.isPermanentlyDenied || status.isRestricted) {
+      return const Color(0xFFEF4444);
+    }
+    return const Color(0xFFF59E0B);
+  }
+
+  IconData _statusIcon(PermissionStatus? status) {
+    if (status == null) return Icons.radio_button_unchecked_rounded;
+    if (status.isGranted || status.isLimited || status.isProvisional) {
+      return Icons.check_circle_rounded;
+    }
+    if (status.isDenied) return Icons.radio_button_unchecked_rounded;
+    if (status.isPermanentlyDenied || status.isRestricted) {
+      return Icons.block_rounded;
+    }
+    return Icons.radio_button_unchecked_rounded;
+  }
+
+  String _statusLabel(PermissionStatus? status) {
+    if (status == null || status.isDenied) return 'Tap to allow';
+    if (status.isGranted || status.isLimited || status.isProvisional) {
+      return 'Granted';
+    }
+    if (status.isPermanentlyDenied || status.isRestricted) {
+      return 'Open Settings';
+    }
+    return 'Tap to allow';
+  }
+
+  int get _grantedCount =>
+      _statuses.values.where((s) => s.isGranted || s.isLimited || s.isProvisional).length;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = widget.accentColor;
+    final isDark = widget.isDark;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Progress header
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$_grantedCount / ${_items.length} permissions granted',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: _items.isEmpty
+                          ? 0
+                          : _grantedCount / _items.length,
+                      backgroundColor:
+                          isDark ? Colors.white12 : Colors.black12,
+                      valueColor: AlwaysStoppedAnimation<Color>(accent),
+                      minHeight: 6,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            // Grant All button
+            GestureDetector(
+              onTap: _isRequesting ? null : _requestAll,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [accent, accent.withValues(alpha: 0.8)],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: accent.withValues(alpha: 0.4),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: _isRequesting
+                    ? SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor:
+                              const AlwaysStoppedAnimation(Colors.white),
+                        ),
+                      )
+                    : const Text(
+                        'Allow All',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                        ),
+                      ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+
+        // Permission rows
+        ..._items.map((item) {
+          final status = _statuses[item.permission];
+          final statusColor = _statusColor(status);
+          final granted = status?.isGranted ?? false;
+          return GestureDetector(
+            onTap: () async {
+              if (status?.isPermanentlyDenied ?? false) {
+                await openAppSettings();
+                await _refreshStatuses();
+              } else if (!granted) {
+                await _requestSingle(item);
+              }
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: granted
+                    ? const Color(0xFF10B981).withValues(alpha: 0.08)
+                    : (isDark
+                        ? Colors.white.withValues(alpha: 0.04)
+                        : Colors.black.withValues(alpha: 0.03)),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: granted
+                      ? const Color(0xFF10B981).withValues(alpha: 0.35)
+                      : (isDark ? Colors.white12 : Colors.black12),
+                  width: 1.2,
+                ),
+              ),
+              child: Row(
+                children: [
+                  // Permission icon
+                  Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      color: item.color.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(item.icon, color: item.color, size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  // Title & reason
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.title,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                        Text(
+                          item.reason,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark
+                                ? Colors.white54
+                                : Colors.black54,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Status badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(_statusIcon(status),
+                            size: 12, color: statusColor),
+                        const SizedBox(width: 4),
+                        Text(
+                          _statusLabel(status),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: statusColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
+
+        // Settings nudge for permanently denied
+        if (_statuses.values.any((s) => s.isPermanentlyDenied)) ...
+          [
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(Icons.settings_rounded,
+                    size: 13, color: accent.withValues(alpha: 0.7)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Some permissions are blocked. Tap the row to open Settings.',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      color: isDark ? Colors.white54 : Colors.black54,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
       ],
     );
   }

@@ -1,23 +1,134 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import '../models/save_result.dart';
 
 export '../models/save_result.dart';
 
 /// Non-web platform implementation for playing audio, downloading files to phone storage/gallery, and sharing
 class PlatformAudioDownloadImpl {
+  static AudioPlayer? _audioPlayer;
+
+  static AudioPlayer get audioPlayer {
+    _audioPlayer ??= AudioPlayer();
+    return _audioPlayer!;
+  }
+
+  /// Plays audio from base64 data URL using real AudioPlayer
   static void playAudio({
     String? base64Data,
     String mimeType = 'audio/wav',
     String? textToSpeak,
-  }) {
-    debugPrint('PlatformAudioDownloadImpl [Stub]: Playing audio sound...');
+    String? localFilePath,
+  }) async {
+    try {
+      stopAudio();
+
+      // If we have the local file directly (e.g. from recording), prefer that — no re-encoding needed
+      if (localFilePath != null && localFilePath.isNotEmpty) {
+        final localFile = File(localFilePath);
+        if (await localFile.exists()) {
+          final player = audioPlayer;
+          await player.stop();
+          await player.play(DeviceFileSource(localFilePath));
+          debugPrint('PlatformAudioDownloadImpl: Playback from local file → $localFilePath');
+          return;
+        }
+      }
+
+      if (base64Data == null || base64Data.trim().isEmpty) {
+        debugPrint('PlatformAudioDownloadImpl: No audio bytes provided to play.');
+        return;
+      }
+
+      final cleanBase64 = base64Data.trim();
+      final Uint8List bytes = base64Decode(cleanBase64);
+      final player = audioPlayer;
+      await player.stop();
+
+      String ext = 'm4a';
+      final lowerMime = mimeType.toLowerCase();
+      if (lowerMime.contains('wav')) {
+        ext = 'wav';
+      } else if (lowerMime.contains('mp3')) {
+        ext = 'mp3';
+      } else if (lowerMime.contains('webm')) {
+        ext = 'webm';
+      } else if (lowerMime.contains('ogg')) {
+        ext = 'ogg';
+      } else if (lowerMime.contains('mp4') || lowerMime.contains('aac')) {
+        ext = 'm4a';
+      }
+
+      // Use path_provider temp dir — works reliably on Android, iOS, Windows
+      final tempDirPath = await _getTempDir();
+
+      final tempFile = File(
+        '$tempDirPath/temp_preview_${DateTime.now().millisecondsSinceEpoch}.$ext',
+      );
+      await tempFile.writeAsBytes(bytes, flush: true);
+
+      await player.play(DeviceFileSource(tempFile.path));
+      debugPrint('PlatformAudioDownloadImpl: Real audio playback from ${tempFile.path} (${bytes.length} bytes)');
+    } catch (e) {
+      debugPrint('PlatformAudioDownloadImpl: Error playing audio: $e');
+    }
   }
 
-  static void stopAudio() {
-    debugPrint('PlatformAudioDownloadImpl [Stub]: Stopping audio sound...');
+  static Future<String> _getTempDir() async {
+    try {
+      final dir = await getTemporaryDirectory();
+      return dir.path;
+    } catch (_) {
+      return Directory.systemTemp.path;
+    }
+  }
+
+  /// Stops current active audio playback
+  static void stopAudio() async {
+    try {
+      if (_audioPlayer != null) {
+        await _audioPlayer!.stop();
+      }
+    } catch (e) {
+      debugPrint('PlatformAudioDownloadImpl: Error stopping audio: $e');
+    }
+  }
+
+  /// Pauses current active audio playback
+  static void pauseAudio() async {
+    try {
+      if (_audioPlayer != null) {
+        await _audioPlayer!.pause();
+      }
+    } catch (e) {
+      debugPrint('PlatformAudioDownloadImpl: Error pausing audio: $e');
+    }
+  }
+
+  /// Resumes current active audio playback
+  static void resumeAudio() async {
+    try {
+      if (_audioPlayer != null) {
+        await _audioPlayer!.resume();
+      }
+    } catch (e) {
+      debugPrint('PlatformAudioDownloadImpl: Error resuming audio: $e');
+    }
+  }
+
+  /// Seeks to a specific duration
+  static void seekAudio(Duration position) async {
+    try {
+      if (_audioPlayer != null) {
+        await _audioPlayer!.seek(position);
+      }
+    } catch (e) {
+      debugPrint('PlatformAudioDownloadImpl: Error seeking audio: $e');
+    }
   }
 
   /// Saves file directly into Phone Storage (Gallery for Images, Downloads/Files Manager for Documents)

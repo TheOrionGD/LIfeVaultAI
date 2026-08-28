@@ -28,7 +28,7 @@ void main() {
     expect(vaultState.voiceNotes.isEmpty, isTrue);
 
     await tester.pumpWidget(LifeVaultApp(vaultState: vaultState));
-    await tester.pumpAndSettle(const Duration(seconds: 3));
+    await tester.pump(const Duration(milliseconds: 500));
 
     // Dashboard overview elements
     expect(find.textContaining('Good'), findsOneWidget);

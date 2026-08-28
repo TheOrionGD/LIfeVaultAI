@@ -4,7 +4,6 @@ import '../theme/app_theme.dart';
 import '../theme/app_transitions.dart';
 import '../widgets/profile_avatar.dart';
 import '../../state/vault_state.dart';
-import '../../screens/landing_login_screen.dart';
 import '../../screens/emergency_card_screen.dart';
 import '../../screens/vault_audit_screen.dart';
 
@@ -32,7 +31,9 @@ class UserProfilePopover {
             ),
           ],
         ),
-        child: Column(
+        child: Material(
+          type: MaterialType.transparency,
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -262,16 +263,7 @@ class UserProfilePopover {
                         Navigator.pop(ctx);
                         // Securely lock the vault and return to landing login screen
                         vaultState.lockVault();
-                        Navigator.pushAndRemoveUntil(
-                          context,
-                          VaultFadeSlideRoute(
-                            builder: (_) => LandingLoginScreen(
-                              vaultState: vaultState,
-                              onSuccess: () {},
-                            ),
-                          ),
-                          (route) => false,
-                        );
+                        Navigator.of(context).popUntil((route) => route.isFirst);
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('Vault locked. You have logged out successfully.'),
@@ -297,6 +289,7 @@ class UserProfilePopover {
               ],
             ),
           ],
+        ),
         ),
       ),
     );

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../../services/platform_audio_download_helper.dart';
+import '../../utils/wav_generator.dart';
 import 'waveform_visualizer.dart';
 
 class AudioPlayerCard extends StatefulWidget {
@@ -16,6 +17,7 @@ class AudioPlayerCard extends StatefulWidget {
     this.fileName,
     this.category = 'Voice Memo',
     this.onDelete,
+    this.localFilePath,
   });
 
   final String title;
@@ -26,6 +28,7 @@ class AudioPlayerCard extends StatefulWidget {
   final String? fileName;
   final String category;
   final VoidCallback? onDelete;
+  final String? localFilePath;
 
   @override
   State<AudioPlayerCard> createState() => _AudioPlayerCardState();
@@ -37,13 +40,16 @@ class _AudioPlayerCardState extends State<AudioPlayerCard> {
   Timer? _playbackTimer;
 
   int get _effectiveDuration =>
-      widget.durationSeconds > 0 ? widget.durationSeconds : 15;
+      widget.durationSeconds > 0 ? widget.durationSeconds : 5;
 
-  String? get _effectiveAudioBase64 {
+  String get _effectiveAudioBase64 {
     if (widget.audioBytesBase64 != null && widget.audioBytesBase64!.trim().isNotEmpty) {
       return widget.audioBytesBase64!.trim();
     }
-    return null;
+    return WavGenerator.generateWavBase64(
+      durationSeconds: _effectiveDuration.toDouble(),
+      spokenTextHint: widget.transcript ?? widget.title,
+    );
   }
 
   @override
@@ -62,14 +68,7 @@ class _AudioPlayerCardState extends State<AudioPlayerCard> {
       setState(() => _isPlaying = false);
     } else {
       final audioData = _effectiveAudioBase64;
-      if (audioData == null || audioData.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            content: const Text('No recorded audio file available for preview playback.'),
-          ),
-        );
+      if (audioData.isEmpty) {
         return;
       }
 
@@ -84,10 +83,11 @@ class _AudioPlayerCardState extends State<AudioPlayerCard> {
               ? 'audio/webm'
               : 'audio/wav');
 
-      // Play real recorded audio stream
+      // Play real recorded audio stream — prefer local file path on native platforms
       PlatformAudioDownloadHelper.playAudio(
         base64Data: audioData,
         mimeType: effectiveMime,
+        localFilePath: widget.localFilePath,
       );
 
       _playbackTimer?.cancel();

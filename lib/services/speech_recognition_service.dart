@@ -24,9 +24,12 @@ class SpeechRecognitionService {
   bool _isSpeechInitialized = false;
   bool _isListening = false;
   bool _isDisposed = false;
+  bool _isRestarting = false; // guard against concurrent restart attempts
   Timer? _amplitudeTimer;
   double _currentAmplitude = 0.0;
   String _accumulatedText = '';
+  // Prefix from prior STT sessions within the same recording (for Android session restarts)
+  String _sessionPrefix = '';
 
   bool get isListening => _isListening;
   double get currentAmplitude => _currentAmplitude;
@@ -48,9 +51,10 @@ class SpeechRecognitionService {
         onStatus: (String status) {
           debugPrint('Speech engine status: $status');
           if (status == 'notListening' || status == 'done') {
-            if (_isListening && !_isDisposed) {
-              // Session paused or completed by engine - restart for continuous recording
-              Future.delayed(const Duration(milliseconds: 150), () {
+            if (_isListening && !_isDisposed && !_isRestarting) {
+              // Debounce: use longer delay on web to avoid InvalidStateError race
+              // when both 'notListening' + 'done' fire in quick succession
+              Future.delayed(const Duration(milliseconds: 400), () {
                 _restartListenSession();
               });
             }
@@ -65,14 +69,23 @@ class SpeechRecognitionService {
   }
 
   Future<void> _restartListenSession() async {
-    if (!_isListening || _isDisposed || _speech.isListening) return;
+    // Prevent concurrent restarts (common on web where notListening+done fire together)
+    if (!_isListening || _isDisposed || _speech.isListening || _isRestarting) return;
+    _isRestarting = true;
     try {
+      // When restarting, commit whatever was accumulated so far as the prefix
+      if (_accumulatedText.isNotEmpty) {
+        _sessionPrefix = _accumulatedText.trim();
+      }
       if (_speech.isAvailable) {
         await _speech.listen(
           onResult: (SpeechRecognitionResult result) {
             if (_isDisposed || !_isListening) return;
             if (result.recognizedWords.isNotEmpty) {
-              _accumulatedText = result.recognizedWords;
+              // Append new words to existing session prefix
+              _accumulatedText = _sessionPrefix.isEmpty
+                  ? result.recognizedWords
+                  : '$_sessionPrefix ${result.recognizedWords}';
               onResult?.call(_accumulatedText, result.finalResult);
             }
           },
@@ -84,7 +97,7 @@ class SpeechRecognitionService {
           },
           listenOptions: stt.SpeechListenOptions(
             listenFor: const Duration(minutes: 5),
-            pauseFor: const Duration(seconds: 4),
+            pauseFor: const Duration(seconds: 5),
             partialResults: true,
             cancelOnError: false,
             listenMode: stt.ListenMode.dictation,
@@ -93,6 +106,8 @@ class SpeechRecognitionService {
       }
     } catch (e) {
       debugPrint('Speech restart note: $e');
+    } finally {
+      _isRestarting = false;
     }
   }
 
@@ -101,6 +116,7 @@ class SpeechRecognitionService {
     if (_isListening || _isDisposed) return true;
 
     _accumulatedText = '';
+    _sessionPrefix = '';  // Reset session prefix at start of new recording
     _isListening = true;
     _startAmplitudeMonitoring();
 
@@ -131,7 +147,8 @@ class SpeechRecognitionService {
         );
       } else {
         if (!_isDisposed) {
-          onError?.call('Microphone access or speech recognizer not ready');
+          // On Android, STT permission may need to be granted — give user a clear message
+          onError?.call('Microphone access or speech recognizer not ready. Check mic permissions in Settings.');
         }
       }
     } catch (e) {

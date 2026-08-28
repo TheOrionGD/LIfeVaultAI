@@ -17,6 +17,7 @@ import '../services/gemini_ai_service.dart';
 import '../services/security_service.dart';
 import '../services/cloud_sync_service.dart';
 import '../services/biometric_auth_service.dart';
+import '../services/notification_service.dart';
 
 enum VaultSortOrder { newest, expirySoonest, titleAZ, titleZA }
 
@@ -67,13 +68,16 @@ class VaultState extends ChangeNotifier {
     LocalStorageService? storageService,
     SecurityService? securityService,
     BiometricAuthService? biometricAuthService,
+    NotificationService? notificationService,
   })  : _storage = storageService ?? LocalStorageService(),
         _security = securityService ?? SecurityService(),
-        _biometricAuth = biometricAuthService ?? BiometricAuthService();
+        _biometricAuth = biometricAuthService ?? BiometricAuthService(),
+        _notifications = notificationService ?? NotificationService();
 
   final LocalStorageService _storage;
   final SecurityService _security;
   final BiometricAuthService _biometricAuth;
+  final NotificationService _notifications;
   final _uuid = const Uuid();
 
   bool _isInitialized = false;
@@ -423,6 +427,12 @@ class VaultState extends ChangeNotifier {
     _isInitialized = true;
     _isLoading = false;
     notifyListeners();
+
+    // Sync active document expiry alerts and tags with system notification center
+    _notifications.syncAllDocumentAlerts(
+      _documents,
+      expiryAlertDays: _userProfile.expiryAlertDays,
+    );
   }
 
   // --- Navigation & UI State ---
@@ -517,6 +527,12 @@ class VaultState extends ChangeNotifier {
     );
     await _storage.saveDocuments(_documents);
     notifyListeners();
+
+    // Refresh notification alerts
+    _notifications.syncAllDocumentAlerts(
+      _documents,
+      expiryAlertDays: _userProfile.expiryAlertDays,
+    );
   }
 
   Future<void> updateDocument(VaultDocument updated) async {
@@ -525,6 +541,12 @@ class VaultState extends ChangeNotifier {
       _documents[index] = updated;
       await _storage.saveDocuments(_documents);
       notifyListeners();
+
+      // Refresh notification alerts
+      _notifications.syncAllDocumentAlerts(
+        _documents,
+        expiryAlertDays: _userProfile.expiryAlertDays,
+      );
     }
   }
 
@@ -532,6 +554,13 @@ class VaultState extends ChangeNotifier {
     _documents.removeWhere((d) => d.id == id);
     await _storage.saveDocuments(_documents);
     notifyListeners();
+
+    // Cancel notifications for deleted document and resync
+    await _notifications.cancelDocumentAlerts(id);
+    _notifications.syncAllDocumentAlerts(
+      _documents,
+      expiryAlertDays: _userProfile.expiryAlertDays,
+    );
   }
 
   Future<void> toggleFavorite(String id) async {
@@ -578,6 +607,12 @@ class VaultState extends ChangeNotifier {
     await _storage.saveDocuments(_documents);
 
     notifyListeners();
+
+    // Refresh notification alerts
+    _notifications.syncAllDocumentAlerts(
+      _documents,
+      expiryAlertDays: _userProfile.expiryAlertDays,
+    );
   }
 
   Future<void> deleteReceipt(String id) async {
@@ -586,6 +621,13 @@ class VaultState extends ChangeNotifier {
     await _storage.saveReceipts(_receipts);
     await _storage.saveDocuments(_documents);
     notifyListeners();
+
+    // Cancel notifications for deleted document and resync
+    await _notifications.cancelDocumentAlerts(id);
+    _notifications.syncAllDocumentAlerts(
+      _documents,
+      expiryAlertDays: _userProfile.expiryAlertDays,
+    );
   }
 
   // --- Voice Note Management ---
@@ -676,7 +718,7 @@ class VaultState extends ChangeNotifier {
   bool get isLockedOut => _security.isLockedOut(_userProfile);
   int get lockoutSecondsRemaining => _security.getLockoutRemainingSeconds(_userProfile);
 
-  /// Authenticates using device hardware biometrics
+  /// Authenticates using device hardware biometrics (Face ID or Fingerprint)
   Future<BiometricAuthResult> authenticateWithBiometrics({
     String reason = 'Scan fingerprint or Face ID to unlock LifeVault',
     bool biometricOnly = false,
@@ -688,6 +730,34 @@ class VaultState extends ChangeNotifier {
       requestedType: requestedType,
     );
 
+    if (result.isSuccess) {
+      _security.unlock();
+      _userProfile = _security.recordSuccessAttempt(_userProfile);
+      await _storage.saveUserProfile(_userProfile);
+      notifyListeners();
+    }
+    return result;
+  }
+
+  /// Explicit Face ID authentication request
+  Future<BiometricAuthResult> authenticateWithFaceId({
+    String reason = 'Look at your device screen to unlock LifeVault with Face ID',
+  }) async {
+    final result = await _biometricAuth.authenticateWithFaceId(reason: reason);
+    if (result.isSuccess) {
+      _security.unlock();
+      _userProfile = _security.recordSuccessAttempt(_userProfile);
+      await _storage.saveUserProfile(_userProfile);
+      notifyListeners();
+    }
+    return result;
+  }
+
+  /// Explicit Fingerprint authentication request
+  Future<BiometricAuthResult> authenticateWithFingerprint({
+    String reason = 'Touch the fingerprint sensor to unlock LifeVault',
+  }) async {
+    final result = await _biometricAuth.authenticateWithFingerprint(reason: reason);
     if (result.isSuccess) {
       _security.unlock();
       _userProfile = _security.recordSuccessAttempt(_userProfile);
@@ -775,6 +845,18 @@ class VaultState extends ChangeNotifier {
         context: context,
       );
     }
+    await _storage.saveUserProfile(_userProfile);
+    notifyListeners();
+  }
+
+  /// Updates last known GPS location coordinates in profile
+  Future<void> updateLastKnownLocation(double latitude, double longitude) async {
+    final nowStr = DateTime.now().toIso8601String();
+    _userProfile = _userProfile.copyWith(
+      lastKnownLatitude: latitude,
+      lastKnownLongitude: longitude,
+      lastLocationTimestamp: nowStr,
+    );
     await _storage.saveUserProfile(_userProfile);
     notifyListeners();
   }

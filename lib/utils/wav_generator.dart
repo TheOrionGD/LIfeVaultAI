@@ -67,34 +67,31 @@ class WavGenerator {
     buffer.setUint8(39, 0x61); // a
     buffer.setUint32(40, dataSize, Endian.little);
 
-    // Generate voice-like modulated audio PCM samples
+    // Generate pleasant modulated audio tone & voice-like cadence
     int offset = 44;
-    final seed = spokenTextHint != null ? spokenTextHint.hashCode : 42;
-    final rng = Random(seed);
-
     for (int i = 0; i < totalSamples; i++) {
       final t = i / sampleRate;
 
-      // Pitch contour & vocal formants modulation
-      final pitchBase = 180.0 + 40.0 * sin(2 * pi * 0.4 * t) + 15.0 * cos(2 * pi * 1.2 * t);
+      // Frequency contour (warm acoustic tone)
+      final pitchBase = 240.0 + 40.0 * sin(2 * pi * 0.6 * t);
       final f1 = pitchBase;
-      final f2 = f1 * 1.8;
-      final f3 = f1 * 2.6;
+      final f2 = f1 * 1.5;
+      final f3 = f1 * 2.0;
 
-      // Syllable rhythmic pulsing (vowel & consonant speech cadence)
-      final speechCadence = (sin(2 * pi * 3.5 * t) + 1.0) / 2.0;
+      // Syllable rhythmic modulation cadence
+      final cadence = 0.6 + 0.4 * sin(2 * pi * 2.8 * t);
 
-      double sample = 0.45 * sin(2 * pi * f1 * t) * speechCadence +
-          0.25 * sin(2 * pi * f2 * t) * speechCadence +
-          0.10 * sin(2 * pi * f3 * t) +
-          (rng.nextDouble() - 0.5) * 0.04; // subtle acoustic ambient noise
+      double sample = (0.45 * sin(2 * pi * f1 * t) +
+              0.25 * sin(2 * pi * f2 * t) +
+              0.15 * sin(2 * pi * f3 * t)) *
+          cadence;
 
-      // Smooth attack fade-in and decay fade-out
+      // Smooth fade-in & fade-out
       double envelope = 1.0;
-      if (t < 0.08) envelope = t / 0.08;
-      if (t > effectiveDuration - 0.08) envelope = (effectiveDuration - t) / 0.08;
+      if (t < 0.05) envelope = t / 0.05;
+      if (t > effectiveDuration - 0.05) envelope = (effectiveDuration - t) / 0.05;
 
-      final intSample = (sample * envelope * 24000).clamp(-32768, 32767).toInt();
+      final intSample = (sample * envelope * 26000).clamp(-32768, 32767).toInt();
       buffer.setInt16(offset, intSample, Endian.little);
       offset += 2;
     }

@@ -13,7 +13,6 @@ import 'vault_audit_screen.dart';
 import 'emergency_card_screen.dart';
 import 'vault_rewards_screen.dart';
 import 'vault_analytics_screen.dart';
-import 'landing_login_screen.dart';
 import 'onboarding_screen.dart';
 
 class ProfileSettingsScreen extends StatefulWidget {
@@ -2599,16 +2598,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                     child: FilledButton.icon(
                       onPressed: () {
                         widget.vaultState.lockVault();
-                        Navigator.pushAndRemoveUntil(
-                          context,
-                          VaultFadeSlideRoute(
-                            builder: (_) => LandingLoginScreen(
-                              vaultState: widget.vaultState,
-                              onSuccess: () {},
-                            ),
-                          ),
-                          (route) => false,
-                        );
+                        Navigator.of(context).popUntil((route) => route.isFirst);
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('Vault locked. You have logged out successfully.'),

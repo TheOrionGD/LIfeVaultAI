@@ -10,17 +10,34 @@ class PlatformAudioDownloadHelper {
     String? base64Data,
     String mimeType = 'audio/wav',
     String? textToSpeak,
+    String? localFilePath,
   }) {
     PlatformAudioDownloadImpl.playAudio(
       base64Data: base64Data,
       mimeType: mimeType,
       textToSpeak: textToSpeak,
+      localFilePath: localFilePath,
     );
   }
 
   /// Stops current active audio playback
   static void stopAudio() {
     PlatformAudioDownloadImpl.stopAudio();
+  }
+
+  /// Pauses current active audio playback
+  static void pauseAudio() {
+    PlatformAudioDownloadImpl.pauseAudio();
+  }
+
+  /// Resumes current active audio playback
+  static void resumeAudio() {
+    PlatformAudioDownloadImpl.resumeAudio();
+  }
+
+  /// Seeks to specific duration
+  static void seekAudio(Duration position) {
+    PlatformAudioDownloadImpl.seekAudio(position);
   }
 
   /// Triggers real file saving into Phone Storage (Gallery for Images, Downloads for Documents)

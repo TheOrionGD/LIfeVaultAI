@@ -293,7 +293,7 @@ class _SplashScreenState extends State<SplashScreen>
                               ),
                               const SizedBox(width: 6),
                               Text(
-                                'v2.1.4 • Zero-Knowledge Local Enclave',
+                                'v5.2.4 • Zero-Knowledge Local Enclave',
                                 style: TextStyle(
                                   color: Colors.white.withValues(alpha: 0.45),
                                   fontSize: 11,

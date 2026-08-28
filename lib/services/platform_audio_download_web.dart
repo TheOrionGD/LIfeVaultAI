@@ -15,6 +15,7 @@ class PlatformAudioDownloadImpl {
     String? base64Data,
     String mimeType = 'audio/wav',
     String? textToSpeak,
+    String? localFilePath, // unused on web — files are not accessible via path
   }) {
     stopAudio();
 
@@ -46,6 +47,32 @@ class PlatformAudioDownloadImpl {
       _activeSpeechUtterance = null;
     } catch (e) {
       debugPrint('Error stopping web audio: $e');
+    }
+  }
+
+  static void pauseAudio() {
+    try {
+      _activeAudioElement?.pause();
+    } catch (e) {
+      debugPrint('Error pausing web audio: $e');
+    }
+  }
+
+  static void resumeAudio() {
+    try {
+      _activeAudioElement?.play();
+    } catch (e) {
+      debugPrint('Error resuming web audio: $e');
+    }
+  }
+
+  static void seekAudio(Duration position) {
+    try {
+      if (_activeAudioElement != null) {
+        _activeAudioElement!.currentTime = position.inMilliseconds / 1000.0;
+      }
+    } catch (e) {
+      debugPrint('Error seeking web audio: $e');
     }
   }
 

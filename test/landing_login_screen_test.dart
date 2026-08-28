@@ -93,7 +93,7 @@ void main() {
       expect(state.isUnlocked, isTrue);
     });
 
-    testWidgets('MPIN flow logs in and prompts biometric registration if not registered', (tester) async {
+    testWidgets('PIN flow logs in and prompts biometric registration if not registered', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -123,11 +123,11 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 100));
 
-      // Tap Login with MPIN
-      await tester.tap(find.text('Login with MPIN'));
+      // Tap Login with PIN
+      await tester.tap(find.text('Login with PIN'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Enter 4-Digit MPIN'), findsOneWidget);
+      expect(find.text('Enter 4-Digit PIN'), findsOneWidget);
 
       // Enter PIN "1234"
       await tester.tap(find.widgetWithText(InkWell, '1'));

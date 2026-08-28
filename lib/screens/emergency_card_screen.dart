@@ -1,26 +1,142 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_transitions.dart';
 import '../core/widgets/soft_panel.dart';
 import '../core/widgets/profile_avatar.dart';
+import '../services/location_service.dart';
+import '../services/emergency_dispatch_service.dart';
 import '../state/vault_state.dart';
 import 'document_detail_screen.dart';
 
-class EmergencyCardScreen extends StatelessWidget {
+class EmergencyCardScreen extends StatefulWidget {
   const EmergencyCardScreen({super.key, required this.vaultState});
 
   final VaultState vaultState;
 
   @override
+  State<EmergencyCardScreen> createState() => _EmergencyCardScreenState();
+}
+
+class _EmergencyCardScreenState extends State<EmergencyCardScreen> {
+  bool _isFetchingGps = false;
+  VaultGpsLocation? _currentGps;
+  String? _gpsStatusMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitialLocation();
+  }
+
+  void _loadInitialLocation() {
+    final profile = widget.vaultState.userProfile;
+    if (LocationService.lastKnownGpsLocation != null) {
+      _currentGps = LocationService.lastKnownGpsLocation;
+    } else if (profile.lastKnownLatitude != 0.0 || profile.lastKnownLongitude != 0.0) {
+      _currentGps = VaultGpsLocation(
+        latitude: profile.lastKnownLatitude,
+        longitude: profile.lastKnownLongitude,
+        timestamp: DateTime.tryParse(profile.lastLocationTimestamp) ?? DateTime.now(),
+      );
+    }
+  }
+
+  Future<void> _fetchLiveGpsLocation() async {
+    setState(() {
+      _isFetchingGps = true;
+      _gpsStatusMessage = null;
+    });
+
+    try {
+      final loc = await LocationService.getCurrentLocation();
+      if (!mounted) return;
+
+      setState(() {
+        _isFetchingGps = false;
+        if (loc.isSuccess) {
+          _currentGps = loc;
+          widget.vaultState.updateLastKnownLocation(loc.latitude, loc.longitude);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: AppColors.mint,
+              content: Row(
+                children: [
+                  const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'GPS Acquired: ${loc.coordinatesString}',
+                      style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        } else {
+          _gpsStatusMessage = loc.errorMessage ?? 'Could not fetch GPS coordinates';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: AppColors.crimson,
+              content: Text(
+                _gpsStatusMessage ?? 'Location fetch failed',
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+          );
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isFetchingGps = false;
+        _gpsStatusMessage = e.toString();
+      });
+    }
+  }
+
+  void _shareEmergencyPass() {
+    final profile = widget.vaultState.userProfile;
+    final lat = _currentGps?.latitude ?? profile.lastKnownLatitude;
+    final lon = _currentGps?.longitude ?? profile.lastKnownLongitude;
+    final mapsUrl = (lat != 0.0 || lon != 0.0)
+        ? LocationService.getGoogleMapsUrl(lat, lon)
+        : 'Not recorded';
+
+    final text = '🚨 LifeVault Emergency ICE Medical Pass\n'
+        'Patient Name: ${profile.hasName ? profile.name : "LifeVault User"}\n'
+        'Blood Group: ${profile.bloodGroup.isNotEmpty ? profile.bloodGroup : "Unknown"}\n'
+        'Allergies: ${profile.allergies.isNotEmpty ? profile.allergies : "None reported"}\n'
+        'Medical Conditions: ${profile.medicalConditions.isNotEmpty ? profile.medicalConditions : "None reported"}\n'
+        'ICE Emergency Contact: ${profile.emergencyContactName} (${profile.emergencyContactPhone})\n'
+        'Last Known Location: $mapsUrl';
+
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text('✓ Emergency ICE Pass copied to clipboard'),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final profile = vaultState.userProfile;
-    final medicalDocs = vaultState.documents
+    final profile = widget.vaultState.userProfile;
+    final medicalDocs = widget.vaultState.documents
         .where((d) =>
             d.category == 'Medical' ||
             d.category == 'Insurance' ||
             d.category == 'Identity')
         .toList();
+
+    final activeLat = _currentGps?.latitude ?? profile.lastKnownLatitude;
+    final activeLon = _currentGps?.longitude ?? profile.lastKnownLongitude;
+    final hasValidCoordinates = activeLat != 0.0 || activeLon != 0.0;
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkCanvas : AppColors.canvas,
@@ -35,11 +151,7 @@ class EmergencyCardScreen extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.share_outlined),
             tooltip: 'Share ICE Pass',
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Emergency ICE Pass copied')),
-              );
-            },
+            onPressed: _shareEmergencyPass,
           ),
         ],
       ),
@@ -95,7 +207,7 @@ class EmergencyCardScreen extends StatelessWidget {
                             ),
                             SizedBox(height: 2),
                             Text(
-                              'Offline Accessible Critical Health & Contact Pass',
+                              'Offline Accessible Critical Health & Emergency Dispatch Pass',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 12,
@@ -104,6 +216,152 @@ class EmergencyCardScreen extends StatelessWidget {
                           ],
                         ),
                       ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // 📍 Live GPS Coordinates & Location Card
+                SoftPanel(
+                  color: isDark ? const Color(0xFF16202C) : const Color(0xFFEFF5FC),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: AppColors.coral.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(
+                                  Icons.location_on_rounded,
+                                  color: AppColors.coral,
+                                  size: 20,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              const Text(
+                                'Last Known GPS Location',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ],
+                          ),
+                          FilledButton.tonalIcon(
+                            onPressed: _isFetchingGps ? null : _fetchLiveGpsLocation,
+                            icon: _isFetchingGps
+                                ? const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.my_location_rounded, size: 16),
+                            label: Text(
+                              _isFetchingGps ? 'Locating...' : 'Fetch GPS',
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      if (hasValidCoordinates) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF1E2836) : Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isDark
+                                  ? Colors.white.withValues(alpha: 0.1)
+                                  : Colors.black.withValues(alpha: 0.06),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'COORDINATES (LAT, LON)',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w800,
+                                            color: AppColors.muted,
+                                            letterSpacing: 0.6,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          '${activeLat.toStringAsFixed(6)}, ${activeLon.toStringAsFixed(6)}',
+                                          style: TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w900,
+                                            color: isDark ? Colors.white : AppColors.ink,
+                                            fontFeatures: const [FontFeature.tabularFigures()],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton.filledTonal(
+                                    onPressed: () => EmergencyDispatchService.openMapLocation(
+                                      context,
+                                      latitude: activeLat,
+                                      longitude: activeLon,
+                                    ),
+                                    icon: const Icon(Icons.map_rounded, size: 18),
+                                    tooltip: 'Open in Google Maps',
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'https://maps.google.com/?q=${activeLat.toStringAsFixed(6)},${activeLon.toStringAsFixed(6)}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.coral,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ] else ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF1E2836) : Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.info_outline_rounded, color: AppColors.muted, size: 18),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  _gpsStatusMessage ??
+                                      'No GPS coordinates recorded yet. Tap "Fetch GPS" to capture live location.',
+                                  style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -129,17 +387,13 @@ class EmergencyCardScreen extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  profile.hasName
-                                      ? profile.name
-                                      : 'LifeVault Owner',
+                                  profile.hasName ? profile.name : 'LifeVault Owner',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     fontSize: 22,
                                     fontWeight: FontWeight.w900,
-                                    color: isDark
-                                        ? AppColors.darkText
-                                        : AppColors.ink,
+                                    color: isDark ? AppColors.darkText : AppColors.ink,
                                   ),
                                 ),
                                 const SizedBox(height: 2),
@@ -151,9 +405,7 @@ class EmergencyCardScreen extends StatelessWidget {
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     fontSize: 13,
-                                    color: isDark
-                                        ? AppColors.darkMuted
-                                        : AppColors.muted,
+                                    color: isDark ? AppColors.darkMuted : AppColors.muted,
                                   ),
                                 ),
                               ],
@@ -184,7 +436,7 @@ class EmergencyCardScreen extends StatelessWidget {
                                   ),
                                 ),
                                 Text(
-                                  profile.bloodGroup,
+                                  profile.bloodGroup.isNotEmpty ? profile.bloodGroup : 'N/A',
                                   style: const TextStyle(
                                     fontSize: 20,
                                     fontWeight: FontWeight.w900,
@@ -217,13 +469,13 @@ class EmergencyCardScreen extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  profile.allergies,
+                                  profile.allergies.isNotEmpty
+                                      ? profile.allergies
+                                      : 'None recorded',
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w700,
-                                    color: isDark
-                                        ? AppColors.darkText
-                                        : AppColors.ink,
+                                    color: isDark ? AppColors.darkText : AppColors.ink,
                                   ),
                                 ),
                               ],
@@ -244,13 +496,13 @@ class EmergencyCardScreen extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  profile.medicalConditions,
+                                  profile.medicalConditions.isNotEmpty
+                                      ? profile.medicalConditions
+                                      : 'None recorded',
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w700,
-                                    color: isDark
-                                        ? AppColors.darkText
-                                        : AppColors.ink,
+                                    color: isDark ? AppColors.darkText : AppColors.ink,
                                   ),
                                 ),
                               ],
@@ -264,7 +516,7 @@ class EmergencyCardScreen extends StatelessWidget {
 
                 const SizedBox(height: 20),
 
-                // Primary Emergency Contact Card
+                // 🚨 Primary Emergency Contact Card with Real Calling & GPS SMS
                 SoftPanel(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -273,7 +525,7 @@ class EmergencyCardScreen extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text(
-                            'Emergency Contact (ICE)',
+                            'Primary Emergency Contact (ICE)',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w900,
@@ -289,7 +541,9 @@ class EmergencyCardScreen extends StatelessWidget {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              profile.iceRelationship,
+                              profile.iceRelationship.isNotEmpty
+                                  ? profile.iceRelationship
+                                  : 'Primary',
                               style: const TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w800,
@@ -329,32 +583,43 @@ class EmergencyCardScreen extends StatelessWidget {
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            // Direct Mobile Call Button
                             IconButton.filledTonal(
+                              style: IconButton.styleFrom(
+                                backgroundColor: AppColors.mint.withValues(alpha: 0.18),
+                                foregroundColor: AppColors.mint,
+                              ),
                               onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'Simulating direct emergency call to ${profile.emergencyContactName}...',
-                                    ),
-                                  ),
+                                EmergencyDispatchService.callEmergencyContact(
+                                  context,
+                                  phoneNumber: profile.emergencyContactPhone,
+                                  contactName: profile.emergencyContactName,
                                 );
                               },
-                              icon: const Icon(Icons.phone, size: 18),
-                              tooltip: 'Call Contact',
+                              icon: const Icon(Icons.phone_rounded, size: 20),
+                              tooltip: 'Call Emergency Contact Directly',
                             ),
-                            const SizedBox(width: 6),
+                            const SizedBox(width: 8),
+                            // Direct GPS Location SMS Button
                             IconButton.filledTonal(
+                              style: IconButton.styleFrom(
+                                backgroundColor: AppColors.coral.withValues(alpha: 0.18),
+                                foregroundColor: AppColors.coral,
+                              ),
                               onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'Simulating emergency SMS dispatch with GPS coordinates to ${profile.emergencyContactName}...',
-                                    ),
-                                  ),
+                                EmergencyDispatchService.sendEmergencySms(
+                                  context,
+                                  phoneNumber: profile.emergencyContactPhone,
+                                  contactName: profile.emergencyContactName,
+                                  latitude: _currentGps?.latitude ?? profile.lastKnownLatitude,
+                                  longitude: _currentGps?.longitude ?? profile.lastKnownLongitude,
+                                  bloodGroup: profile.bloodGroup,
+                                  allergies: profile.allergies,
+                                  userName: profile.name,
                                 );
                               },
-                              icon: const Icon(Icons.sms_outlined, size: 18),
-                              tooltip: 'Send Emergency SMS',
+                              icon: const Icon(Icons.sms_rounded, size: 20),
+                              tooltip: 'Send GPS Location SMS to Contact',
                             ),
                           ],
                         ),
@@ -362,6 +627,104 @@ class EmergencyCardScreen extends StatelessWidget {
                     ],
                   ),
                 ),
+
+                // Secondary Emergency Contact (if set)
+                if (profile.secondaryEmergencyContactPhone.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  SoftPanel(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Secondary Emergency Contact',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: AppColors.butter.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                profile.secondaryIceRelationship.isNotEmpty
+                                    ? profile.secondaryIceRelationship
+                                    : 'Secondary',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.amber,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: AppColors.butter.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.person_rounded,
+                              color: AppColors.amber,
+                              size: 20,
+                            ),
+                          ),
+                          title: Text(
+                            profile.secondaryEmergencyContactName.isNotEmpty
+                                ? profile.secondaryEmergencyContactName
+                                : 'Secondary Contact',
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                          subtitle: Text(profile.secondaryEmergencyContactPhone),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton.filledTonal(
+                                onPressed: () {
+                                  EmergencyDispatchService.callEmergencyContact(
+                                    context,
+                                    phoneNumber: profile.secondaryEmergencyContactPhone,
+                                    contactName: profile.secondaryEmergencyContactName,
+                                  );
+                                },
+                                icon: const Icon(Icons.phone_rounded, size: 18),
+                                tooltip: 'Call Secondary Contact',
+                              ),
+                              const SizedBox(width: 6),
+                              IconButton.filledTonal(
+                                onPressed: () {
+                                  EmergencyDispatchService.sendEmergencySms(
+                                    context,
+                                    phoneNumber: profile.secondaryEmergencyContactPhone,
+                                    contactName: profile.secondaryEmergencyContactName,
+                                    latitude: _currentGps?.latitude ?? profile.lastKnownLatitude,
+                                    longitude: _currentGps?.longitude ?? profile.lastKnownLongitude,
+                                    bloodGroup: profile.bloodGroup,
+                                    allergies: profile.allergies,
+                                    userName: profile.name,
+                                  );
+                                },
+                                icon: const Icon(Icons.sms_rounded, size: 18),
+                                tooltip: 'Send GPS SMS to Secondary Contact',
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
 
                 const SizedBox(height: 20),
 
@@ -385,9 +748,7 @@ class EmergencyCardScreen extends StatelessWidget {
                             'No medical, insurance, or identity documents stored in your vault yet.',
                             style: TextStyle(
                               fontSize: 13,
-                              color: isDark
-                                  ? AppColors.darkMuted
-                                  : AppColors.muted,
+                              color: isDark ? AppColors.darkMuted : AppColors.muted,
                             ),
                           ),
                         )
@@ -415,9 +776,7 @@ class EmergencyCardScreen extends StatelessWidget {
                                 '${doc.category}${doc.documentNumber != null ? ' • #${doc.documentNumber}' : ''}',
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: isDark
-                                      ? AppColors.darkMuted
-                                      : AppColors.muted,
+                                  color: isDark ? AppColors.darkMuted : AppColors.muted,
                                 ),
                               ),
                               trailing: const Icon(
@@ -430,7 +789,7 @@ class EmergencyCardScreen extends StatelessWidget {
                                   VaultFadeSlideRoute(
                                     builder: (_) => DocumentDetailScreen(
                                       document: doc,
-                                      vaultState: vaultState,
+                                      vaultState: widget.vaultState,
                                     ),
                                   ),
                                 );
@@ -438,55 +797,6 @@ class EmergencyCardScreen extends StatelessWidget {
                             );
                           },
                         ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                // First Responder QR Code Simulation Card
-                SoftPanel(
-                  color: isDark ? AppColors.darkSurface : AppColors.surface,
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          color: isDark ? AppColors.darkCanvas : AppColors.ink,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: const Icon(
-                          Icons.qr_code_2_rounded,
-                          color: AppColors.mint,
-                          size: 48,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Offline Paramedic QR Pass',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w900,
-                                fontSize: 15,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'First responders can scan this encrypted pass from your lock screen in emergency situations.',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: isDark
-                                    ? AppColors.darkMuted
-                                    : AppColors.muted,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                     ],
                   ),
                 ),

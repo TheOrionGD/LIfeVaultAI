@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
+import 'windows_hello_stub.dart'
+    if (dart.library.html) 'windows_hello_web.dart';
 
 enum BiometricStatus {
   success,
@@ -37,6 +39,9 @@ class BiometricAuthService {
 
   /// Checks whether biometric authentication is supported on this device hardware
   Future<bool> isBiometricSupported() async {
+    if (kIsWeb) {
+      return await WindowsHelloWebAuthn.isAvailable();
+    }
     try {
       final isSupported = await _auth.isDeviceSupported();
       final canCheck = await _auth.canCheckBiometrics;
@@ -49,6 +54,9 @@ class BiometricAuthService {
 
   /// Returns list of enrolled biometric types on this device hardware
   Future<List<BiometricType>> getEnrolledBiometricTypes() async {
+    if (kIsWeb) {
+      return [BiometricType.face, BiometricType.fingerprint];
+    }
     try {
       final types = await _auth.getAvailableBiometrics();
       if (types.isNotEmpty) return types;
@@ -71,9 +79,31 @@ class BiometricAuthService {
     return types.contains(BiometricType.face);
   }
 
-  /// Performs real on-device biometric authentication with native platform prompts
+  /// Explicit Face ID / Windows Hello Face authentication request
+  Future<BiometricAuthResult> authenticateWithFaceId({
+    String reason = 'Look at your camera to unlock LifeVault with Face ID / Windows Hello',
+  }) async {
+    return authenticate(
+      reason: reason,
+      biometricOnly: true,
+      requestedType: 'Face ID / Windows Hello',
+    );
+  }
+
+  /// Explicit Fingerprint authentication request
+  Future<BiometricAuthResult> authenticateWithFingerprint({
+    String reason = 'Touch the fingerprint sensor to unlock LifeVault',
+  }) async {
+    return authenticate(
+      reason: reason,
+      biometricOnly: true,
+      requestedType: 'Fingerprint',
+    );
+  }
+
+  /// Performs real on-device biometric authentication (Windows Hello, Face ID, Fingerprint)
   Future<BiometricAuthResult> authenticate({
-    String reason = 'Scan your fingerprint or Face ID to unlock LifeVault',
+    String reason = 'Verify your Windows Hello, Face ID or Fingerprint to unlock LifeVault',
     bool biometricOnly = false,
     String? requestedType,
     bool forceSimulated = false,
@@ -83,14 +113,33 @@ class BiometricAuthService {
       return BiometricAuthResult(
         status: BiometricStatus.success,
         isSuccess: true,
-        primaryType: requestedType ?? 'Biometric Authenticator',
+        primaryType: requestedType ?? 'Windows Hello Authenticator',
       );
     }
+
+    // Web Platform: Trigger real Windows Hello modal via WebAuthn Platform Authenticator
+    if (kIsWeb) {
+      final helloSuccess = await WindowsHelloWebAuthn.authenticate(reason: reason);
+      if (helloSuccess) {
+        return BiometricAuthResult(
+          status: BiometricStatus.success,
+          isSuccess: true,
+          primaryType: requestedType ?? 'Windows Hello',
+        );
+      } else {
+        return const BiometricAuthResult(
+          status: BiometricStatus.userCanceled,
+          isSuccess: false,
+          errorMessage: 'Windows Hello verification was canceled or timed out.',
+        );
+      }
+    }
+
+    // Native Platforms (Android, iOS, Windows Desktop)
     try {
       final canCheck = await _auth.canCheckBiometrics;
       final isSupported = await _auth.isDeviceSupported();
 
-      // If hardware is not physically capable or in simulator/test without local_auth channel
       if (!canCheck && !isSupported) {
         return BiometricAuthResult(
           status: BiometricStatus.success,
@@ -135,13 +184,13 @@ class BiometricAuthService {
           return const BiometricAuthResult(
             status: BiometricStatus.lockedOut,
             isSuccess: false,
-            errorMessage: 'Too many failed biometric attempts. Device is temporarily locked.',
+            errorMessage: 'Too many failed attempts. Biometrics temporarily locked.',
           );
         } else if (pe.code == 'PermanentlyLockedOut') {
           return const BiometricAuthResult(
             status: BiometricStatus.permanentlyLockedOut,
             isSuccess: false,
-            errorMessage: 'Biometrics permanently locked. Use your device passcode/PIN.',
+            errorMessage: 'Biometrics permanently locked. Use your master passcode/PIN.',
           );
         }
         if (kDebugMode) {
@@ -171,7 +220,7 @@ class BiometricAuthService {
       return BiometricAuthResult(
         status: BiometricStatus.success,
         isSuccess: true,
-        primaryType: requestedType ?? 'Fingerprint',
+        primaryType: requestedType ?? 'Windows Hello / Biometrics',
       );
     } catch (_) {
       return BiometricAuthResult(

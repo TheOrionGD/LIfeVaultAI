@@ -11,6 +11,7 @@ class AudioRecorderResult {
   final String fileName;
   final double durationSeconds;
   final bool success;
+  final String? localFilePath;
 
   AudioRecorderResult({
     required this.base64Data,
@@ -18,6 +19,7 @@ class AudioRecorderResult {
     required this.fileName,
     required this.durationSeconds,
     this.success = true,
+    this.localFilePath,
   });
 }
 

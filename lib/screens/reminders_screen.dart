@@ -7,6 +7,7 @@ import '../core/widgets/soft_panel.dart';
 import '../core/widgets/empty_state_view.dart';
 import '../models/vault_document.dart';
 import '../models/vault_reminder.dart';
+import '../services/notification_service.dart';
 import '../state/vault_state.dart';
 import 'document_detail_screen.dart';
 
@@ -114,11 +115,55 @@ class _RemindersScreenState extends State<RemindersScreen> {
                         ],
                       ),
                     ),
+                    IconButton(
+                      tooltip: 'Test Notification Center alert',
+                      icon: const Icon(Icons.send_rounded, size: 20),
+                      onPressed: () async {
+                        await NotificationService().showInstantAlert(
+                          id: 999999,
+                          title: '🔔 LifeVault Notification Center Test',
+                          body: 'On-device local notifications are active and ready!',
+                        );
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Test notification dispatched to your Notification Center!'),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                      },
+                    ),
                     Switch(
                       value: _notificationsEnabled,
                       activeThumbColor: AppTheme.of(context).primaryAccent,
-                      onChanged: (val) =>
-                          setState(() => _notificationsEnabled = val),
+                      onChanged: (val) async {
+                        setState(() => _notificationsEnabled = val);
+                        if (val) {
+                          await NotificationService().syncAllDocumentAlerts(
+                            widget.vaultState.documents,
+                            expiryAlertDays: widget.vaultState.userProfile.expiryAlertDays,
+                          );
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Notification Center alerts enabled & synced.'),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          }
+                        } else {
+                          await NotificationService().cancelAll();
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('All local scheduled alerts paused.'),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          }
+                        }
+                      },
                     ),
                   ],
                 ),

@@ -10,8 +10,10 @@ import '../core/widgets/biometric_registration_dialog.dart';
 import '../core/widgets/master_auth_dialog.dart';
 import '../core/widgets/stacked_feature_card_deck.dart';
 import '../services/biometric_filter_service.dart';
+import '../services/biometric_auth_service.dart';
 import '../state/vault_state.dart';
 import 'emergency_card_screen.dart';
+import 'help_support_screen.dart';
 import 'onboarding_screen.dart';
 import 'scan_document_screen.dart';
 import 'vault_audit_screen.dart';
@@ -73,6 +75,15 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
     _pulseController.forward();
     _floatController.forward();
     _entranceController.forward();
+
+    // Auto-prompt Face ID / Biometrics if enabled on app return or lock
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted &&
+          widget.vaultState.userProfile.isBiometricEnabled &&
+          !widget.vaultState.isUnlocked) {
+        _autoPromptBiometrics();
+      }
+    });
   }
 
   @override
@@ -180,7 +191,34 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
     );
   }
 
+  bool _hasAutoPrompted = false;
+
+  Future<void> _autoPromptBiometrics() async {
+    if (_hasAutoPrompted || !mounted || widget.vaultState.isUnlocked) return;
+    _hasAutoPrompted = true;
+    final bioResult = BiometricFilterService.resolveBiometrics(
+      policy: _biometricPolicy,
+    );
+    await _triggerBiometricAuth(bioResult);
+  }
+
+  Future<void> _triggerFaceIdAuth() async {
+    final result = await widget.vaultState.authenticateWithFaceId(
+      reason: 'Look at your device to unlock LifeVault with Face ID',
+    );
+    if (!mounted) return;
+    if (result.isSuccess) {
+      widget.vaultState.unlockVault();
+      widget.onSuccess();
+    }
+  }
+
   Future<void> _triggerBiometricAuth(FilteredBiometricResult bioResult) async {
+    if (bioResult.primaryType == BiometricHardwareType.face) {
+      await _triggerFaceIdAuth();
+      return;
+    }
+
     bool bioAuthenticated = false;
     await MasterAuthDialog.show(
       context,
@@ -199,7 +237,7 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
     }
   }
 
-  Future<void> _openMpinSheet({bool isRegistering = false}) async {
+  Future<void> _openPinSheet({bool isRegistering = false}) async {
     bool loginSuccessful = false;
     await MasterAuthDialog.show(
       context,
@@ -303,7 +341,7 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
         buttonLabel: 'View Receipts',
         onTap: () {
           if (!widget.vaultState.isUnlocked) {
-            _openMpinSheet(isRegistering: !isPinConfigured);
+            _openPinSheet(isRegistering: !isPinConfigured);
           }
         },
       ),
@@ -318,7 +356,7 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
         buttonLabel: 'Voice Memos',
         onTap: () {
           if (!widget.vaultState.isUnlocked) {
-            _openMpinSheet(isRegistering: !isPinConfigured);
+            _openPinSheet(isRegistering: !isPinConfigured);
           }
         },
       ),
@@ -789,7 +827,7 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
                                   crossAxisAlignment: WrapCrossAlignment.center,
                                   children: [
                                     TextButton(
-                                      onPressed: () => _openMpinSheet(
+                                      onPressed: () => _openPinSheet(
                                         isRegistering: !isPinConfigured,
                                       ),
                                       style: TextButton.styleFrom(
@@ -801,7 +839,7 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
                                       ),
                                       child: Text(
                                         isPinConfigured
-                                            ? 'Login with MPIN'
+                                            ? 'Login with PIN'
                                             : 'Set Up Master PIN',
                                       ),
                                     ),
@@ -810,7 +848,7 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
                                       style: TextStyle(color: Colors.grey),
                                     ),
                                     TextButton(
-                                      onPressed: () => _openMpinSheet(
+                                      onPressed: () => _openPinSheet(
                                         isRegistering: !isPinConfigured,
                                       ),
                                       style: TextButton.styleFrom(
@@ -1473,11 +1511,10 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
                     icon: Icons.support_agent_rounded,
                     label: 'Support',
                     onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'LifeVault Help: 100% Offline Capable & Encrypted',
-                          ),
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const HelpSupportScreen(),
                         ),
                       );
                     },
@@ -1529,9 +1566,9 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
                   ),
                   _buildBottomBarItem(
                     icon: Icons.lock_outline_rounded,
-                    label: 'MPIN Login',
+                    label: 'PIN Login',
                     onTap: () =>
-                        _openMpinSheet(isRegistering: !isPinConfigured),
+                        _openPinSheet(isRegistering: !isPinConfigured),
                   ),
                 ],
               ),
@@ -1821,15 +1858,25 @@ class _BiometricAuthSheetState extends State<_BiometricAuthSheet>
       duration: const Duration(milliseconds: 1200),
     )..forward();
 
-    // Auto trigger biometric simulation on open
-    Future.delayed(const Duration(milliseconds: 1000), () {
-      if (mounted) {
-        setState(() => _isSuccess = true);
-        Future.delayed(const Duration(milliseconds: 300), () {
-          if (mounted) widget.onAuthenticated();
-        });
-      }
-    });
+    _triggerRealBiometric();
+  }
+
+  Future<void> _triggerRealBiometric() async {
+    final result = await widget.vaultState.biometricAuth.authenticate(
+      reason: 'Scan your biometric credential to unlock LifeVault',
+      requestedType: widget.bioResult.primaryType == BiometricHardwareType.face
+          ? 'Face ID'
+          : 'Fingerprint',
+    );
+    if (!mounted) return;
+    if (result.isSuccess) {
+      setState(() => _isSuccess = true);
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted) widget.onAuthenticated();
+      });
+    } else if (result.status == BiometricStatus.userCanceled) {
+      if (mounted) Navigator.pop(context);
+    }
   }
 
   @override
@@ -2018,9 +2065,9 @@ class _BiometricAuthSheetState extends State<_BiometricAuthSheet>
   }
 }
 
-/// MPIN / Setup PIN Bottom Sheet with Numpad & Error Shake
-class _MpinAuthSheet extends StatefulWidget {
-  const _MpinAuthSheet({
+/// PIN / Setup PIN Bottom Sheet with Numpad & Error Shake
+class _PinAuthSheet extends StatefulWidget {
+  const _PinAuthSheet({
     required this.vaultState,
     required this.isRegistering,
     required this.onSuccess,
@@ -2031,10 +2078,10 @@ class _MpinAuthSheet extends StatefulWidget {
   final ValueChanged<bool> onSuccess;
 
   @override
-  State<_MpinAuthSheet> createState() => _MpinAuthSheetState();
+  State<_PinAuthSheet> createState() => _PinAuthSheetState();
 }
 
-class _MpinAuthSheetState extends State<_MpinAuthSheet>
+class _PinAuthSheetState extends State<_PinAuthSheet>
     with SingleTickerProviderStateMixin {
   late final AnimationController _shakeController;
   String _pin = '';
@@ -2126,11 +2173,11 @@ class _MpinAuthSheetState extends State<_MpinAuthSheet>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final accent = AppTheme.of(context).primaryAccent;
 
-    String title = 'Enter 4-Digit MPIN';
-    String subtitle = 'Enter your security MPIN to unlock your vault.';
+    String title = 'Enter 4-Digit PIN';
+    String subtitle = 'Enter your security PIN to unlock your vault.';
 
     if (widget.isRegistering) {
-      title = _isConfirming ? 'Confirm 4-Digit MPIN' : 'Create 4-Digit MPIN';
+      title = _isConfirming ? 'Confirm 4-Digit PIN' : 'Create 4-Digit PIN';
       subtitle = 'Set a master PIN to safeguard your LifeVault on-device.';
     }
 

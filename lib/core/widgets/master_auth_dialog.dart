@@ -248,11 +248,15 @@ class _MasterAuthDialogState extends State<MasterAuthDialog>
       _biometricError = null;
     });
 
-    final result = await widget.vaultState.authenticateWithBiometrics(
-      reason: 'Authenticate to access encrypted LifeVault records',
-      biometricOnly: false,
-      requestedType: _selectedBioType == 'face' ? 'Face ID' : 'Fingerprint',
-    );
+    final result = _selectedBioType == 'face'
+        ? await widget.vaultState.authenticateWithFaceId(
+            reason: 'Look at your device screen to unlock LifeVault with Face ID',
+          )
+        : await widget.vaultState.authenticateWithBiometrics(
+            reason: 'Scan your fingerprint or Face ID to access encrypted LifeVault records',
+            biometricOnly: false,
+            requestedType: _selectedBioType == 'face' ? 'Face ID' : 'Fingerprint',
+          );
 
     if (!mounted) return;
 
@@ -458,7 +462,7 @@ class _MasterAuthDialogState extends State<MasterAuthDialog>
         children: [
           Expanded(
             child: _buildTabButton(
-              title: '🔢 MPIN / Pass',
+              title: '🔢 PIN / Pass',
               isSelected: _currentMode == AuthMode.pin,
               onTap: () => setState(() {
                 _currentMode = AuthMode.pin;
@@ -540,13 +544,13 @@ class _MasterAuthDialogState extends State<MasterAuthDialog>
     );
   }
 
-  // --- TAB 1: 🔢 MPIN & PASSWORD VIEW ---
+  // --- TAB 1: 🔢 PIN & PASSWORD VIEW ---
   Widget _buildPinView(bool isDark, Color accent) {
-    String title = 'Enter 4-Digit MPIN';
-    String subtitle = 'Enter your security MPIN to unlock your vault.';
+    String title = 'Enter 4-Digit PIN';
+    String subtitle = 'Enter your security PIN to unlock your vault.';
 
     if (widget.isSetupMode) {
-      title = _isConfirmingSetup ? 'Confirm 4-Digit MPIN' : 'Create 4-Digit MPIN';
+      title = _isConfirmingSetup ? 'Confirm 4-Digit PIN' : 'Create 4-Digit PIN';
       subtitle = 'Set a master security PIN to encrypt your LifeVault records.';
     }
 
@@ -675,7 +679,7 @@ class _MasterAuthDialogState extends State<MasterAuthDialog>
           const SizedBox(height: 10),
           TextButton(
             onPressed: () => setState(() => _usePasswordMode = false),
-            child: const Text('Switch to 4-Digit MPIN Keypad'),
+            child: const Text('Switch to 4-Digit PIN Keypad'),
           ),
         ],
 
@@ -1040,7 +1044,7 @@ class _MasterAuthDialogState extends State<MasterAuthDialog>
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            _isConfirmingRecoveryPin ? 'Confirm New 4-Digit MPIN' : 'Create New 4-Digit MPIN',
+            _isConfirmingRecoveryPin ? 'Confirm New 4-Digit PIN' : 'Create New 4-Digit PIN',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w900,

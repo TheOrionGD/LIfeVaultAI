@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 
@@ -44,6 +45,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
   String? _pickedAudioBase64;
   String? _pickedAudioFileName;
   String? _pickedAudioMimeType;
+  String? _recordedLocalFilePath; // native file path for direct playback on Android/iOS
 
   // AI Summary for Voice Note
   Map<String, dynamic>? _aiVoiceAnalysis;
@@ -90,14 +92,17 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
 
   Future<void> _toggleRecording() async {
     if (_isRecording) {
-      // Stop recording
+      // 1. Stop Speech recognition
       await _speechService.stopListening();
+
+      // 2. Stop native audio recorder to get real voice recording
       final recordedAudioResult = await AudioRecorderHelper.stopRecording(
         durationSeconds: _seconds > 0 ? _seconds.toDouble() : 5.0,
       );
 
       _timer?.cancel();
       _timer = null;
+
       if (mounted) {
         setState(() {
           _isRecording = false;
@@ -107,12 +112,7 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
             _pickedAudioBase64 = recordedAudioResult.base64Data;
             _pickedAudioFileName = recordedAudioResult.fileName;
             _pickedAudioMimeType = recordedAudioResult.mimeType;
-          } else {
-            if (_pickedAudioFileName == null) {
-              _pickedAudioFileName =
-                  'recording_${DateTime.now().millisecondsSinceEpoch}.webm';
-              _pickedAudioMimeType = 'audio/webm';
-            }
+            _recordedLocalFilePath = recordedAudioResult.localFilePath;
           }
 
           if (_titleController.text.trim().isEmpty) {
@@ -121,13 +121,16 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
         });
       }
 
-      // Automatically transcribe real recorded microphone audio bytes using Gemini Multimodal Audio AI / Whisper
-      if (_pickedAudioBase64 != null && _pickedAudioBase64!.isNotEmpty) {
+      // If speech-to-text was empty or very short, transcribe the recorded audio bytes with Gemini/Whisper
+      if ((_transcriptController.text.trim().isEmpty ||
+              _transcriptController.text.trim().length < 5) &&
+          recordedAudioResult != null &&
+          recordedAudioResult.base64Data.isNotEmpty) {
         try {
-          final audioBytes = base64Decode(_pickedAudioBase64!);
-          await _transcribeRealAudioBytes(audioBytes, _pickedAudioFileName ?? 'recording.webm');
+          final bytes = base64Decode(recordedAudioResult.base64Data);
+          await _transcribeRealAudioBytes(bytes, recordedAudioResult.fileName);
         } catch (e) {
-          debugPrint('Recorded audio transcription note: $e');
+          debugPrint('Audio post-recording transcription error: $e');
         }
       } else if (_transcriptController.text.isNotEmpty) {
         _runAiAudioAnalysis(_transcriptController.text);
@@ -136,10 +139,12 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
       // Start recording
       _seconds = 0;
       _pickedAudioBase64 = null;
+      _recordedLocalFilePath = null;
       setState(() {
         _isRecording = true;
         _pickedAudioFileName =
-            'voice_recording_${DateTime.now().millisecondsSinceEpoch}.webm';
+            'voice_recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        _pickedAudioMimeType = 'audio/mp4';
       });
 
       _timer?.cancel();
@@ -153,8 +158,31 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
         });
       });
 
-      await AudioRecorderHelper.startRecording();
-      await _speechService.startListening();
+      // 1. Start audio recording engine
+      final recordingStarted = await AudioRecorderHelper.startRecording();
+      if (!recordingStarted && mounted) {
+        setState(() {
+          _isRecording = false;
+        });
+        _timer?.cancel();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            behavior: SnackBarBehavior.floating,
+            content: Text(
+              '🎤 Microphone permission required. Please allow access in your device settings.',
+            ),
+          ),
+        );
+        return;
+      }
+      // 2. Start speech-to-text listener for real-time transcription (Web only due to mic lock on mobile)
+      if (kIsWeb) {
+        await _speechService.startListening();
+      } else {
+        setState(() {
+          _liveAmplitude = 0.5; // Static amplitude so button shows recording state
+        });
+      }
     }
   }
 
@@ -491,8 +519,9 @@ class _VoiceNoteScreenState extends State<VoiceNoteScreen> {
                     audioBytesBase64: _pickedAudioBase64,
                     mimeType: _pickedAudioMimeType ?? 'audio/webm',
                     transcript: _transcriptController.text,
-                    fileName: _pickedAudioFileName ?? 'audio_memo.webm',
+                    fileName: _pickedAudioFileName ?? 'audio_memo.m4a',
                     category: 'Voice Memo',
+                    localFilePath: _recordedLocalFilePath,
                   ),
                 ],
 
