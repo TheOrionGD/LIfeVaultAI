@@ -58,10 +58,16 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
 
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.completed && mounted) {
+        widget.onFinished();
+      }
+    });
+
     _controller.forward();
 
-    // Trigger completion
-    Future.delayed(const Duration(milliseconds: 2700), () {
+    // Fallback safety trigger
+    Future.delayed(const Duration(milliseconds: 2500), () {
       if (mounted) widget.onFinished();
     });
   }

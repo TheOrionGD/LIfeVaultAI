@@ -11,8 +11,10 @@ import 'state/vault_state.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Initialize local notifications service for lock screen and notification tray alerts
-  await NotificationService().init();
+  // Asynchronously initialize local notifications in background so app starts instantaneously
+  NotificationService().init().catchError((e) {
+    debugPrint('[NotificationService] Initialization warning: $e');
+  });
 
   final vaultState = VaultState();
   await vaultState.initialize();

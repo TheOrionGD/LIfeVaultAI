@@ -4,13 +4,13 @@
 > **Release Target:** `main`  
 > **Package:** `com.theoriongd.lifevault` (LifeVault AI)  
 > **Build:** `5.2.4+1`  
-> **Asset:** `LifeVault-v5.2.4-release.apk` / `lifevault-release.apk` (88.6 MB)
+> **Asset:** `LifeVault-v5.2.4-release.apk` / `lifevault-release.apk` (88.7 MB)
 
 ---
 
 ## 🌟 Overview
 
-We are proud to present **LifeVault AI v5.2.4**, featuring enhanced cross-platform audio recording, emergency medical dispatch with GPS coordinates, local background notifications, and biometric zero-knowledge authentication.
+We are proud to present **LifeVault AI v5.2.4**, featuring enhanced cross-platform audio recording, emergency medical dispatch with GPS coordinates, local background notifications, dedicated Cyber Face ID biometric scanning, instant Amazon-style auto-lock on app switching, and biometric zero-knowledge authentication.
 
 **LifeVault AI** is a zero-knowledge, privacy-first personal document intelligence vault and multimodal security system built with Flutter and Dart. It combines client-side cryptographic storage with multimodal artificial intelligence (**Google Gemini 3.7 Flash** and **Hugging Face Whisper**) to provide automated document OCR, conversational retrieval (RAG), expense and warranty tracking, encrypted voice notes, and instant emergency medical access.
 
@@ -20,48 +20,37 @@ We are proud to present **LifeVault AI v5.2.4**, featuring enhanced cross-platfo
 
 | File | Type | Size | SHA-256 Checksum |
 | :--- | :--- | :--- | :--- |
-| **`LifeVault-v5.2.4-release.apk`** | Android Standalone Release APK | `~88.6 MB` (`92,895,435 bytes`) | `D1AC95243EE3F5C388C179987A1C457CA40D2F9B09CDC73DFD77EAD2FF3E46B4` |
-| **`lifevault-release.apk`** | Android Standalone Release APK | `~88.6 MB` (`92,895,435 bytes`) | `D1AC95243EE3F5C388C179987A1C457CA40D2F9B09CDC73DFD77EAD2FF3E46B4` |
+| **`LifeVault-v5.2.4-release.apk`** | Android Standalone Release APK | `~88.7 MB` (`92,990,199 bytes`) | `58AD3C07ED587629691B0112FA3DCA6FDE54582514F277AF54F4B2AA25F4DF3A` |
+| **`lifevault-release.apk`** | Android Standalone Release APK | `~88.7 MB` (`92,990,199 bytes`) | `58AD3C07ED587629691B0112FA3DCA6FDE54582514F277AF54F4B2AA25F4DF3A` |
 
 ### Checksum Verification
 
 **Windows (PowerShell):**
 ```powershell
 Get-FileHash -Path ".\LifeVault-v5.2.4-release.apk" -Algorithm SHA256
-# Expected: D1AC95243EE3F5C388C179987A1C457CA40D2F9B09CDC73DFD77EAD2FF3E46B4
+# Expected: 58AD3C07ED587629691B0112FA3DCA6FDE54582514F277AF54F4B2AA25F4DF3A
 ```
 
 **Linux / macOS:**
 ```bash
 sha256sum LifeVault-v5.2.4-release.apk
-# Expected: cd3dfd8e8cf0765523c6c5da412a352c135e1f96053daad7f7ce623b1fb8992b  LifeVault-v5.2.4-release.apk
+# Expected: 58ad3c07ed587629691b0112fa3dca6fde54582514f277af54f4b2aa25f4df3a  LifeVault-v5.2.4-release.apk
 ```
 
 ---
 
-## 🚀 Key Highlights & New Features in v5.2.4
+## 🚀 Key Fixes & New Features in v5.2.4
 
-### 🔔 1. Local App & System Notifications
-- **Background Scheduled Notifications**: Native alerts for document expiry, warranty renewals, and daily reminders via `flutter_local_notifications`.
-- **Cross-Platform Desugaring Support**: Enhanced Java 17 Core Library Desugaring for high reliability across all Android API versions.
-- **Web & Desktop Fallback**: Web Notification API helper with instant permission management.
+### 👤 1. Dedicated Cyber Face ID Recognition Scanner
+- **Immersive Face ID Scanner Viewfinder**: Animated 3D-styled face mesh wireframe, rotating radar rings, and animated laser sweep.
+- **Android Front-Camera Face Unlock**: Relaxed biometric restrictions so Android's front camera face recognition triggers seamlessly with custom `AndroidAuthMessages`.
+- **Instant Fallback**: Quick access to Fingerprint and 4-digit Master PIN at any time.
 
-### 🆘 2. Real-Time Emergency SOS & Location Dispatch
-- **Live GPS Coordination**: Instant location discovery and SOS payload assembly for medical first responders.
-- **Paramedic Emergency Card**: Quick-access ICE (In Case of Emergency) medical profile with offline card viewing and contact dialer.
+### 🔒 2. Amazon Mobile App Style Instant Auto-Lock
+- **Background Auto-Lock**: Automatically locks the vault the exact moment you leave or switch to another app.
+- **Seamless Biometric Resume**: Returning to LifeVault immediately presents the Face ID / Biometrics prompt without requiring extra button taps.
+- **Fixed Landing Page Navigation**: Guaranteed navigation into dashboard upon successful biometric or PIN login.
 
-### 🎙️ 3. Encrypted Voice Notes & Whisper AI Transcription
-- **Cross-Platform Audio Recording**: High-fidelity microphone capture with WAV conversion and streaming playback.
-- **Whisper AI Integration**: Local / cloud speech-to-text with interactive audio player and waveform visualization.
-
-### 🛡️ 4. Biometric & Master Auth Gate
-- **Tri-Mode Biometric Verification**: Windows Hello, Android Biometrics (Fingerprint/Face), and Master PIN.
-- **Zero-Knowledge Security**: AES-256-GCM client-side encryption for local documents and metadata.
-
----
-
-## 🔒 Privacy & Cryptographic Integrity
-
-- **Zero-Knowledge Architecture**: Encryption and decryption keys never leave the local device.
-- **AES-256-GCM / PBKDF2**: Client-side cryptography with SHA-256 integrity verification.
-- **Anti-Brute Force Protection**: Exponential lockout timers on repeated PIN failure attempts.
+### ⚡ 3. Android Installation & Startup Optimization
+- **Zero Package Parse Errors**: Clean build with `compileSdk = 37`, `targetSdk = 34`, and `minSdk = 24` for 100% installation compatibility.
+- **Instant Startup**: Asynchronous notification loading and animation completion listeners so the splash screen and app launch instantaneously without hanging.

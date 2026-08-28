@@ -7,6 +7,7 @@ import '../core/theme/app_theme.dart';
 import '../core/theme/app_transitions.dart';
 import '../core/widgets/accent_color_selector_widget.dart';
 import '../core/widgets/biometric_registration_dialog.dart';
+import '../core/widgets/face_scanner_dialog.dart';
 import '../core/widgets/master_auth_dialog.dart';
 import '../core/widgets/stacked_feature_card_deck.dart';
 import '../services/biometric_filter_service.dart';
@@ -231,18 +232,27 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
   }
 
   Future<void> _triggerFaceIdAuth() async {
-    final result = await widget.vaultState.authenticateWithFaceId(
-      reason: 'Look at your device to unlock LifeVault with Face ID',
+    await FaceScannerDialog.show(
+      context,
+      vaultState: widget.vaultState,
+      onSuccess: () {
+        widget.vaultState.unlockVault();
+        widget.onSuccess();
+      },
+      onFallbackToPin: () => _openPinSheet(),
+      onFallbackToFingerprint: () async {
+        final result = await widget.vaultState.authenticateWithFingerprint();
+        if (result.isSuccess && mounted) {
+          widget.vaultState.unlockVault();
+          widget.onSuccess();
+        }
+      },
     );
-    if (!mounted) return;
-    if (result.isSuccess) {
-      widget.vaultState.unlockVault();
-      widget.onSuccess();
-    }
   }
 
   Future<void> _triggerBiometricAuth(FilteredBiometricResult bioResult) async {
-    if (bioResult.primaryType == BiometricHardwareType.face) {
+    if (bioResult.primaryType == BiometricHardwareType.face ||
+        _biometricPolicy == BiometricFilterPolicy.faceOnly) {
       await _triggerFaceIdAuth();
       return;
     }
@@ -282,10 +292,9 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
     if (loginSuccessful) {
       if (!widget.vaultState.userProfile.isBiometricEnabled) {
         await _promptRegisterBiometricAfterLogin();
-      } else {
-        widget.vaultState.unlockVault();
-        widget.onSuccess();
       }
+      widget.vaultState.unlockVault();
+      widget.onSuccess();
     }
   }
 
