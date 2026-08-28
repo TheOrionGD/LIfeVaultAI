@@ -50,7 +50,7 @@ void main() {
       expect(find.text('ICE Pass'), findsOneWidget);
     });
 
-    testWidgets('Tapping fingerprint target opens Image 2 Native Biometric Sheet and authenticates', (tester) async {
+    testWidgets('Tapping fingerprint target directly triggers native biometric auth and unlocks vault', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -72,21 +72,12 @@ void main() {
           ),
         ),
       );
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       // Tap fingerprint viewfinder
       await tester.tap(find.byWidgetPredicate(
         (w) => w is Icon && w.icon == Icons.fingerprint_rounded && w.size == 56.0,
       ));
-      await tester.pumpAndSettle();
-
-      // Master Biometric Dialog
-      expect(find.text('Biometric Verification'), findsOneWidget);
-      expect(find.text('👆 Biometrics'), findsOneWidget);
-      expect(find.text('Use Master PIN Instead'), findsOneWidget);
-
-      // Tap biometric sensor icon to authenticate
-      await tester.tap(find.byKey(const ValueKey('biometric_sensor_button')));
       await tester.pumpAndSettle();
 
       expect(successTriggered, isTrue);

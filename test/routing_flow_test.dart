@@ -37,8 +37,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 2800));
       await tester.pumpAndSettle();
 
-      // 3. Routed to OnboardingScreen (14-slide Tour)
-      expect(find.text('v2.1.4 Tour'), findsOneWidget);
+      // 3. Routed to OnboardingScreen (15-slide Tour)
+      expect(find.text('v5.2.4 Tour'), findsOneWidget);
       expect(find.text('Next Feature'), findsOneWidget);
 
       // Skip/Finish Onboarding to reach Landing Screen
@@ -54,15 +54,6 @@ void main() {
       // 4. Authenticate via biometric target box
       await tester.tap(find.byKey(const ValueKey('landing_biometric_viewfinder')));
       await tester.pump(const Duration(milliseconds: 600));
-      await tester.pumpAndSettle();
-
-      // Modal Master Auth Dialog opens
-      expect(find.text('Biometric Verification'), findsOneWidget);
-      expect(find.text('👆 Biometrics'), findsOneWidget);
-
-      // Tap sensor to authenticate
-      await tester.tap(find.byKey(const ValueKey('biometric_sensor_button')));
-      await tester.pump(const Duration(milliseconds: 500));
       await tester.pumpAndSettle();
 
       // 5. Unlocked & Routed to Home Dashboard (MainShellScreen)

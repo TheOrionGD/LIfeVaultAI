@@ -94,37 +94,40 @@ class _FaceScannerDialogState extends State<FaceScannerDialog>
     setState(() {
       _isScanning = true;
       _errorMessage = null;
-      _statusText = 'Scanning facial structure & depth vectors...';
+      _statusText = 'Authenticating face against enrolled device data...';
     });
 
-    // Run face authentication
     final result = await widget.vaultState.authenticateWithFaceId(
-      reason: 'Look directly at the front camera to unlock LifeVault with Face ID',
-      forceFaceRecognitionOnly: true,
+      reason: 'Look directly at your device to verify identity with Face ID',
     );
 
     if (!mounted) return;
 
     if (result.isSuccess) {
-      setState(() {
-        _isScanning = false;
-        _isSuccess = true;
-        _statusText = 'Face ID Identity Verified 100%';
-      });
-
-      await Future.delayed(const Duration(milliseconds: 650));
-      if (!mounted) return;
-      Navigator.of(context, rootNavigator: true).pop(true);
-      widget.vaultState.unlockVault();
-      widget.onSuccess();
+      _onFaceVerified();
     } else {
       setState(() {
         _isScanning = false;
         _isSuccess = false;
-        _errorMessage = result.errorMessage ?? 'Face not recognized. Please retry or use PIN.';
-        _statusText = 'Facial verification paused.';
+        _errorMessage = result.errorMessage ??
+            'Face not recognized against enrolled device data. Please retry or use PIN.';
+        _statusText = 'Facial verification failed.';
       });
     }
+  }
+
+  void _onFaceVerified() async {
+    setState(() {
+      _isScanning = false;
+      _isSuccess = true;
+      _statusText = 'Face ID Identity Verified 100%';
+    });
+
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (!mounted) return;
+    Navigator.of(context, rootNavigator: true).pop(true);
+    widget.vaultState.unlockVault();
+    widget.onSuccess();
   }
 
   @override

@@ -87,6 +87,7 @@ class VaultState extends ChangeNotifier {
   String _selectedCategory = 'All';
   VaultSortOrder _sortOrder = VaultSortOrder.newest;
   bool _isAiThinking = false;
+  bool _isAuthenticatingBiometrics = false;
 
   List<VaultDocument> _documents = [];
   List<ReceiptRecord> _receipts = [];
@@ -98,6 +99,8 @@ class VaultState extends ChangeNotifier {
   bool get isInitialized => _isInitialized;
   bool get isLoading => _isLoading;
   int get selectedTabIndex => _selectedTabIndex;
+  bool get isAuthenticatingBiometrics => _isAuthenticatingBiometrics;
+  BiometricAuthService get biometricAuth => _biometricAuth;
   String get searchQuery => _searchQuery;
   String get selectedCategory => _selectedCategory;
   VaultSortOrder get sortOrder => _sortOrder;
@@ -714,7 +717,6 @@ class VaultState extends ChangeNotifier {
   }
 
   // --- Security & Profile ---
-  BiometricAuthService get biometricAuth => _biometricAuth;
   bool get isLockedOut => _security.isLockedOut(_userProfile);
   int get lockoutSecondsRemaining => _security.getLockoutRemainingSeconds(_userProfile);
 
@@ -742,33 +744,41 @@ class VaultState extends ChangeNotifier {
   /// Explicit Face ID authentication request
   Future<BiometricAuthResult> authenticateWithFaceId({
     String reason = 'Look at your device screen to unlock LifeVault with Face ID',
-    bool forceFaceRecognitionOnly = false,
   }) async {
-    final result = await _biometricAuth.authenticateWithFaceId(
-      reason: reason,
-      forceFaceRecognitionOnly: forceFaceRecognitionOnly,
-    );
-    if (result.isSuccess) {
-      _security.unlock();
-      _userProfile = _security.recordSuccessAttempt(_userProfile);
-      await _storage.saveUserProfile(_userProfile);
-      notifyListeners();
+    _isAuthenticatingBiometrics = true;
+    try {
+      final result = await _biometricAuth.authenticateWithFaceId(
+        reason: reason,
+      );
+      if (result.isSuccess) {
+        _security.unlock();
+        _userProfile = _security.recordSuccessAttempt(_userProfile);
+        await _storage.saveUserProfile(_userProfile);
+        notifyListeners();
+      }
+      return result;
+    } finally {
+      _isAuthenticatingBiometrics = false;
     }
-    return result;
   }
 
   /// Explicit Fingerprint authentication request
   Future<BiometricAuthResult> authenticateWithFingerprint({
     String reason = 'Touch the fingerprint sensor to unlock LifeVault',
   }) async {
-    final result = await _biometricAuth.authenticateWithFingerprint(reason: reason);
-    if (result.isSuccess) {
-      _security.unlock();
-      _userProfile = _security.recordSuccessAttempt(_userProfile);
-      await _storage.saveUserProfile(_userProfile);
-      notifyListeners();
+    _isAuthenticatingBiometrics = true;
+    try {
+      final result = await _biometricAuth.authenticateWithFingerprint(reason: reason);
+      if (result.isSuccess) {
+        _security.unlock();
+        _userProfile = _security.recordSuccessAttempt(_userProfile);
+        await _storage.saveUserProfile(_userProfile);
+        notifyListeners();
+      }
+      return result;
+    } finally {
+      _isAuthenticatingBiometrics = false;
     }
-    return result;
   }
 
   /// Verifies PIN or Password with rate-limiting and lockout protection

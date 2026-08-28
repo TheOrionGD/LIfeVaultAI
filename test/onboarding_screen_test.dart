@@ -40,8 +40,8 @@ void main() {
 
       // Slide 1 Header & Details
       expect(find.text('LifeVault AI'), findsOneWidget);
-      expect(find.text('v2.1.4 Tour'), findsOneWidget);
-      expect(find.text('1 / 14'), findsOneWidget);
+      expect(find.text('v5.2.4 Tour'), findsOneWidget);
+      expect(find.text('1 / 15'), findsOneWidget);
       expect(find.text('WELCOME'), findsOneWidget);
       expect(find.text('Next-Gen AI Privacy Vault'), findsOneWidget);
       expect(find.text('Next Feature'), findsOneWidget);
@@ -51,7 +51,7 @@ void main() {
       await tester.tap(find.text('Next Feature'));
       await tester.pumpAndSettle();
 
-      expect(find.text('2 / 14'), findsOneWidget);
+      expect(find.text('2 / 15'), findsOneWidget);
       expect(find.text('ENCRYPTION'), findsOneWidget);
       expect(find.text('Zero-Knowledge AES-256 Storage'), findsOneWidget);
       expect(find.text('Back'), findsOneWidget);
@@ -60,7 +60,7 @@ void main() {
       await tester.tap(find.text('Next Feature'));
       await tester.pumpAndSettle();
 
-      expect(find.text('3 / 14'), findsOneWidget);
+      expect(find.text('3 / 15'), findsOneWidget);
       expect(find.text('SMART SCANNER'), findsOneWidget);
       expect(find.text('AI Scanner & Automatic OCR'), findsOneWidget);
 
@@ -68,7 +68,7 @@ void main() {
       await tester.tap(find.text('Back'));
       await tester.pumpAndSettle();
 
-      expect(find.text('2 / 14'), findsOneWidget);
+      expect(find.text('2 / 15'), findsOneWidget);
       expect(find.text('ENCRYPTION'), findsOneWidget);
 
       // Tap Skip to complete onboarding
@@ -79,7 +79,7 @@ void main() {
       expect(state.hasCompletedOnboarding, isTrue);
     });
 
-    testWidgets('Swipe / Advance to final slide 14 shows "Get Started" action',
+    testWidgets('Swipe / Advance to final slide 15 shows "Get Started" action',
         (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
@@ -104,20 +104,20 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Advance through all 14 slides
-      for (int i = 1; i <= 13; i++) {
+      // Advance through all slides to 15
+      for (int i = 1; i <= 14; i++) {
         await tester.tap(find.text('Next Feature'));
         await tester.pumpAndSettle();
       }
 
-      // Final Slide 14 (AUTHENTICATION)
-      expect(find.text('14 / 14'), findsOneWidget);
-      expect(find.text('AUTHENTICATION'), findsOneWidget);
-      expect(find.text('Biometric Gate & Master PIN Access'), findsOneWidget);
-      expect(find.text('Get Started & Secure Vault'), findsOneWidget);
+      // Final Slide 15 (PERMISSIONS)
+      expect(find.text('15 / 15'), findsOneWidget);
+      expect(find.text('PERMISSIONS'), findsOneWidget);
+      expect(find.text('Grant App Permissions'), findsOneWidget);
+      expect(find.text('All Set — Enter LifeVault'), findsOneWidget);
 
-      // Tap Get Started
-      await tester.tap(find.text('Get Started & Secure Vault'));
+      // Tap Enter LifeVault
+      await tester.tap(find.text('All Set — Enter LifeVault'));
       await tester.pumpAndSettle();
 
       expect(completed, isTrue);

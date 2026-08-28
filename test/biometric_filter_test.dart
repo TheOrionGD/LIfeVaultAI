@@ -86,7 +86,7 @@ void main() {
   });
 
   group('LandingLoginScreen Biometric Filtering UI Widget Tests', () {
-    testWidgets('Allows switching between Fingerprint and Face ID on multi-biometric devices', (tester) async {
+    testWidgets('LandingLoginScreen defaults directly to Fingerprint and PIN', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -108,21 +108,10 @@ void main() {
       );
       await tester.pump();
 
-      // Check multi-biometric selector chips
-      expect(find.text('Fingerprint'), findsWidgets);
-      expect(find.text('Face ID'), findsWidgets);
-
-      // Switch to Face ID
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Face ID'));
-      await tester.pump();
-
-      expect(find.text('Login using Face ID / Biometrics'), findsOneWidget);
-
-      // Switch back to Fingerprint
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Fingerprint'));
-      await tester.pump();
-
+      // Fingerprint and PIN options are present, Face ID chips are removed
       expect(find.text('Login using Fingerprint / Biometrics'), findsOneWidget);
+      expect(find.byIcon(Icons.fingerprint_rounded), findsWidgets);
+      expect(find.widgetWithText(ChoiceChip, 'Face ID'), findsNothing);
     });
   });
 }

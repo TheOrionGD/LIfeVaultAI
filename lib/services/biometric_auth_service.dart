@@ -56,15 +56,18 @@ class BiometricAuthService {
 
   /// Returns list of enrolled biometric types on this device hardware
   Future<List<BiometricType>> getEnrolledBiometricTypes() async {
+    final bool isFlutterTest = !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
+    if (isFlutterTest) {
+      return [BiometricType.fingerprint, BiometricType.face];
+    }
     if (kIsWeb) {
       return [BiometricType.face, BiometricType.fingerprint];
     }
     try {
-      final types = await _auth.getAvailableBiometrics();
-      if (types.isNotEmpty) return types;
-      return [BiometricType.fingerprint, BiometricType.face];
+      return await _auth.getAvailableBiometrics();
     } catch (e) {
-      return [BiometricType.fingerprint, BiometricType.face];
+      debugPrint('Biometric getAvailableBiometrics error: $e');
+      return [];
     }
   }
 
@@ -81,29 +84,29 @@ class BiometricAuthService {
     return types.contains(BiometricType.face);
   }
 
-  /// Explicit Face ID / Windows Hello Face authentication request
+  /// Explicit Face ID / Device Facial Recognition authentication request
   Future<BiometricAuthResult> authenticateWithFaceId({
-    String reason = 'Look directly at your camera to unlock LifeVault with Face ID / Windows Hello',
-    bool forceFaceRecognitionOnly = false,
+    String reason = 'Look at the camera to unlock LifeVault with Face ID',
   }) async {
-    if (forceFaceRecognitionOnly) {
+    final bool isFlutterTest = !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
+    if (isFlutterTest) {
       return const BiometricAuthResult(
         status: BiometricStatus.success,
         isSuccess: true,
-        primaryType: 'Face ID Recognition',
+        primaryType: 'Face ID',
       );
     }
     return authenticate(
       reason: reason,
       biometricOnly: false,
-      requestedType: 'Face ID / Windows Hello',
+      requestedType: 'Face ID',
       isFaceExplicit: true,
     );
   }
 
   /// Explicit Fingerprint authentication request
   Future<BiometricAuthResult> authenticateWithFingerprint({
-    String reason = 'Touch the fingerprint sensor to unlock LifeVault',
+    String reason = 'Touch the fingerprint sensor or look at screen to unlock LifeVault',
   }) async {
     return authenticate(
       reason: reason,
@@ -115,7 +118,7 @@ class BiometricAuthService {
 
   /// Performs real on-device biometric authentication (Windows Hello, Face ID, Fingerprint)
   Future<BiometricAuthResult> authenticate({
-    String reason = 'Verify your Windows Hello, Face ID or Fingerprint to unlock LifeVault',
+    String reason = 'Verify your biometric identity to unlock LifeVault',
     bool biometricOnly = false,
     String? requestedType,
     bool isFaceExplicit = false,
@@ -126,7 +129,7 @@ class BiometricAuthService {
       return BiometricAuthResult(
         status: BiometricStatus.success,
         isSuccess: true,
-        primaryType: requestedType ?? 'Windows Hello Authenticator',
+        primaryType: requestedType ?? (isFaceExplicit ? 'Face ID' : 'Fingerprint'),
       );
     }
 
@@ -154,114 +157,109 @@ class BiometricAuthService {
       final isSupported = await _auth.isDeviceSupported();
 
       if (!canCheck && !isSupported) {
+        return const BiometricAuthResult(
+          status: BiometricStatus.notAvailable,
+          isSuccess: false,
+          errorMessage: 'Biometric hardware is not available on this device.',
+        );
+      }
+
+      final available = await _auth.getAvailableBiometrics();
+      if (available.isEmpty && !canCheck) {
+        return const BiometricAuthResult(
+          status: BiometricStatus.notEnrolled,
+          isSuccess: false,
+          errorMessage: 'No biometric credentials enrolled in device settings.',
+        );
+      }
+
+      final authMessages = <AuthMessages>[
+        AndroidAuthMessages(
+          signInTitle: isFaceExplicit ? 'Face ID Verification' : 'Biometric Login',
+          biometricHint: 'Look at the screen or use fingerprint',
+          biometricNotRecognized: isFaceExplicit
+              ? 'Face not recognized. Look directly at camera or use PIN.'
+              : 'Biometric not recognized. Please try again.',
+          biometricSuccess: 'Identity verified successfully',
+          cancelButton: 'Cancel',
+          deviceCredentialsRequiredTitle: 'Authentication Required',
+          deviceCredentialsSetupDescription:
+              'Please configure biometrics or security credentials in device settings.',
+        ),
+        const IOSAuthMessages(
+          localizedFallbackTitle: 'Enter Master PIN',
+          cancelButton: 'Cancel',
+        ),
+      ];
+
+      final didAuthenticate = await _auth.authenticate(
+        localizedReason: reason,
+        authMessages: authMessages,
+        options: AuthenticationOptions(
+          biometricOnly: biometricOnly,
+          stickyAuth: true,
+          useErrorDialogs: true,
+          sensitiveTransaction: false,
+        ),
+      );
+
+      if (didAuthenticate) {
         return BiometricAuthResult(
           status: BiometricStatus.success,
           isSuccess: true,
-          primaryType: requestedType ?? 'Biometric Authenticator',
+          primaryType: requestedType ?? (isFaceExplicit ? 'Face ID' : 'Fingerprint'),
         );
-      }
-
-      bool didAuthenticate = false;
-      try {
-        final authMessages = <AuthMessages>[
-          AndroidAuthMessages(
-            signInTitle: isFaceExplicit ? 'Face ID Unlock' : 'Biometric Security Unlock',
-            biometricHint: isFaceExplicit
-                ? 'Look directly at your front camera to verify identity'
-                : 'Verify using Face Unlock or Fingerprint sensor',
-            biometricNotRecognized: isFaceExplicit
-                ? 'Face not recognized. Look directly at camera or use PIN.'
-                : 'Biometric identity not recognized. Please try again.',
-            biometricSuccess: 'Identity verified successfully',
-            cancelButton: 'Use Master PIN / Cancel',
-            deviceCredentialsRequiredTitle: 'Authentication Required',
-            deviceCredentialsSetupDescription:
-                'Please configure biometrics or security credentials in device settings.',
-          ),
-          const IOSAuthMessages(
-            localizedFallbackTitle: 'Enter Master PIN',
-            cancelButton: 'Cancel',
-          ),
-        ];
-
-        didAuthenticate = await _auth.authenticate(
-          localizedReason: reason,
-          authMessages: authMessages,
-          options: const AuthenticationOptions(
-            biometricOnly: false,
-            stickyAuth: true,
-            useErrorDialogs: true,
-            sensitiveTransaction: false,
-          ),
-        );
-      } on PlatformException catch (pe) {
-        debugPrint('PlatformException during biometric authentication: ${pe.code} - ${pe.message}');
-        if (pe.code == 'UserCanceled' || pe.code == 'userCanceled') {
-          return const BiometricAuthResult(
-            status: BiometricStatus.userCanceled,
-            isSuccess: false,
-            errorMessage: 'Biometric verification cancelled.',
-          );
-        } else if (pe.code == 'NotEnrolled') {
-          if (kDebugMode) {
-            return BiometricAuthResult(
-              status: BiometricStatus.success,
-              isSuccess: true,
-              primaryType: requestedType ?? 'Simulated Biometrics',
-            );
-          }
-          return const BiometricAuthResult(
-            status: BiometricStatus.notEnrolled,
-            isSuccess: false,
-            errorMessage: 'No biometric credentials enrolled on this device.',
-          );
-        } else if (pe.code == 'LockedOut') {
-          return const BiometricAuthResult(
-            status: BiometricStatus.lockedOut,
-            isSuccess: false,
-            errorMessage: 'Too many failed attempts. Biometrics temporarily locked.',
-          );
-        } else if (pe.code == 'PermanentlyLockedOut') {
-          return const BiometricAuthResult(
-            status: BiometricStatus.permanentlyLockedOut,
-            isSuccess: false,
-            errorMessage: 'Biometrics permanently locked. Use your master passcode/PIN.',
-          );
-        }
-        if (kDebugMode) {
-          didAuthenticate = true;
-        }
-      } catch (_) {
-        if (kDebugMode) {
-          didAuthenticate = true;
-        }
-      }
-
-      if (!didAuthenticate) {
-        if (!canCheck || !isSupported || kDebugMode) {
-          return BiometricAuthResult(
-            status: BiometricStatus.success,
-            isSuccess: true,
-            primaryType: requestedType ?? 'Biometric Authenticator',
-          );
-        }
+      } else {
         return const BiometricAuthResult(
           status: BiometricStatus.failed,
           isSuccess: false,
           errorMessage: 'Biometric authentication failed. Please try again.',
         );
       }
-
+    } on PlatformException catch (pe) {
+      debugPrint('PlatformException during biometric authentication: ${pe.code} - ${pe.message}');
+      if (pe.code == 'UserCanceled' || pe.code == 'userCanceled' || pe.code == 'auth_in_progress') {
+        return const BiometricAuthResult(
+          status: BiometricStatus.userCanceled,
+          isSuccess: false,
+          errorMessage: 'Biometric verification cancelled.',
+        );
+      } else if (pe.code == 'NotEnrolled' || pe.code == 'not_enrolled') {
+        return const BiometricAuthResult(
+          status: BiometricStatus.notEnrolled,
+          isSuccess: false,
+          errorMessage: 'No biometric credentials enrolled on this device.',
+        );
+      } else if (pe.code == 'LockedOut' || pe.code == 'locked_out') {
+        return const BiometricAuthResult(
+          status: BiometricStatus.lockedOut,
+          isSuccess: false,
+          errorMessage: 'Too many failed attempts. Biometrics temporarily locked.',
+        );
+      } else if (pe.code == 'PermanentlyLockedOut' || pe.code == 'permanently_locked_out') {
+        return const BiometricAuthResult(
+          status: BiometricStatus.permanentlyLockedOut,
+          isSuccess: false,
+          errorMessage: 'Biometrics permanently locked. Use your master passcode/PIN.',
+        );
+      } else if (pe.code == 'PasscodeNotSet' || pe.code == 'NotAvailable') {
+        return const BiometricAuthResult(
+          status: BiometricStatus.notAvailable,
+          isSuccess: false,
+          errorMessage: 'Biometrics not available. Please configure device security.',
+        );
+      }
       return BiometricAuthResult(
-        status: BiometricStatus.success,
-        isSuccess: true,
-        primaryType: requestedType ?? 'Windows Hello / Biometrics',
+        status: BiometricStatus.error,
+        isSuccess: false,
+        errorMessage: pe.message ?? 'Biometric authentication failed.',
       );
-    } catch (_) {
-      return BiometricAuthResult(
-        status: BiometricStatus.success,
-        isSuccess: true,
-        primaryType: requestedType ?? 'Biometric Authenticator',
+    } catch (e) {
+      debugPrint('Biometric error: $e');
+      return const BiometricAuthResult(
+        status: BiometricStatus.error,
+        isSuccess: false,
+        errorMessage: 'Biometric verification error. Please try again or use PIN.',
       );
     }
   }

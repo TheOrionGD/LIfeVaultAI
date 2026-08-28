@@ -183,7 +183,8 @@ class NotificationService {
   }) async {
     final now = DateTime.now();
 
-    for (final doc in documents) {
+    final docList = List<VaultDocument>.from(documents);
+    for (final doc in docList) {
       if (doc.expiryDate == null) continue;
 
       final expiry = doc.expiryDate!;

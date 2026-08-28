@@ -115,18 +115,21 @@ class _LifeVaultRootState extends State<LifeVaultRoot> with WidgetsBindingObserv
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive ||
         state == AppLifecycleState.hidden) {
-      // App switched away or minimized to background
+      // Do not record background timestamp if biometric prompt overlay is active
+      if (widget.vaultState.isAuthenticatingBiometrics) return;
       _backgroundTimestamp ??= DateTime.now();
 
-      // Amazon / Banking App Security Standard:
-      // If autoLockMinutes is 0 (Immediate), lock the vault the moment the user leaves the app
       final autoLockMinutes = widget.vaultState.userProfile.autoLockMinutes;
       if (autoLockMinutes == 0 && widget.vaultState.isUnlocked) {
-        debugPrint('[LifeVault Security] Amazon-style instant auto-lock triggered on background.');
+        debugPrint('[LifeVault Security] Instant auto-lock triggered on background.');
         widget.vaultState.lockVault();
       }
     } else if (state == AppLifecycleState.resumed) {
-      // User returns to app from background or another app
+      // If biometric prompt was active, do not auto-lock on dismiss
+      if (widget.vaultState.isAuthenticatingBiometrics) {
+        _backgroundTimestamp = null;
+        return;
+      }
       if (_backgroundTimestamp != null) {
         final elapsedSeconds =
             DateTime.now().difference(_backgroundTimestamp!).inSeconds;
@@ -135,7 +138,7 @@ class _LifeVaultRootState extends State<LifeVaultRoot> with WidgetsBindingObserv
 
         final thresholdSeconds = autoLockMinutes * 60;
 
-        if (elapsedSeconds >= thresholdSeconds) {
+        if (thresholdSeconds > 0 && elapsedSeconds >= thresholdSeconds) {
           if (widget.vaultState.isUnlocked) {
             debugPrint('[LifeVault Security] Auto-locking vault after $elapsedSeconds s in background.');
             widget.vaultState.lockVault();

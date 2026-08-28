@@ -1096,73 +1096,61 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    SizedBox(
-                      width: 170,
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            VaultFadeSlideRoute(
-                              builder: (_) =>
-                                  VaultAuditScreen(vaultState: widget.vaultState),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.verified_user_rounded,
-                            size: 16, color: AppColors.mint),
-                        label: const Text('Security Audit'),
-                      ),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          VaultFadeSlideRoute(
+                            builder: (_) =>
+                                VaultAuditScreen(vaultState: widget.vaultState),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.verified_user_rounded,
+                          size: 16, color: AppColors.mint),
+                      label: const Text('Security Audit'),
                     ),
-                    SizedBox(
-                      width: 140,
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            VaultFadeSlideRoute(
-                              builder: (_) => EmergencyCardScreen(
-                                  vaultState: widget.vaultState),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.emergency_rounded,
-                            size: 16, color: AppColors.crimson),
-                        label: const Text('ICE Pass'),
-                      ),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          VaultFadeSlideRoute(
+                            builder: (_) => EmergencyCardScreen(
+                                vaultState: widget.vaultState),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.emergency_rounded,
+                          size: 16, color: AppColors.crimson),
+                      label: const Text('ICE Pass'),
                     ),
-                    SizedBox(
-                      width: 140,
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            VaultFadeSlideRoute(
-                              builder: (_) =>
-                                  VaultRewardsScreen(vaultState: widget.vaultState),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.military_tech_rounded,
-                            size: 16, color: AppColors.butter),
-                        label: const Text('Rewards'),
-                      ),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          VaultFadeSlideRoute(
+                            builder: (_) =>
+                                VaultRewardsScreen(vaultState: widget.vaultState),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.military_tech_rounded,
+                          size: 16, color: AppColors.butter),
+                      label: const Text('Rewards'),
                     ),
-                    SizedBox(
-                      width: 140,
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            VaultFadeSlideRoute(
-                              builder: (_) => VaultAnalyticsScreen(
-                                  vaultState: widget.vaultState),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.insights_rounded,
-                            size: 16, color: AppColors.sky),
-                        label: const Text('Analytics'),
-                      ),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          VaultFadeSlideRoute(
+                            builder: (_) => VaultAnalyticsScreen(
+                                vaultState: widget.vaultState),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.insights_rounded,
+                          size: 16, color: AppColors.sky),
+                      label: const Text('Analytics'),
                     ),
                   ],
                 ),

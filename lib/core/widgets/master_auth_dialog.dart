@@ -252,12 +252,10 @@ class _MasterAuthDialogState extends State<MasterAuthDialog>
 
     final result = _selectedBioType == 'face'
         ? await widget.vaultState.authenticateWithFaceId(
-            reason: 'Look at your device screen to unlock LifeVault with Face ID',
+            reason: 'Look directly at your camera to unlock LifeVault with Face ID',
           )
-        : await widget.vaultState.authenticateWithBiometrics(
-            reason: 'Scan your fingerprint or Face ID to access encrypted LifeVault records',
-            biometricOnly: false,
-            requestedType: _selectedBioType == 'face' ? 'Face ID' : 'Fingerprint',
+        : await widget.vaultState.authenticateWithFingerprint(
+            reason: 'Touch the fingerprint sensor to unlock LifeVault',
           );
 
     if (!mounted) return;
@@ -267,7 +265,10 @@ class _MasterAuthDialogState extends State<MasterAuthDialog>
         _isBiometricScanning = false;
         _isBiometricSuccess = true;
       });
-      Navigator.pop(context);
+      widget.vaultState.unlockVault();
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
       widget.onSuccess();
     } else {
       setState(() {

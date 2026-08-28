@@ -7,10 +7,9 @@ import '../core/theme/app_theme.dart';
 import '../core/theme/app_transitions.dart';
 import '../core/widgets/accent_color_selector_widget.dart';
 import '../core/widgets/biometric_registration_dialog.dart';
-import '../core/widgets/face_scanner_dialog.dart';
 import '../core/widgets/master_auth_dialog.dart';
 import '../core/widgets/stacked_feature_card_deck.dart';
-import '../services/biometric_filter_service.dart';
+import 'package:local_auth/local_auth.dart';
 import '../services/biometric_auth_service.dart';
 import '../state/vault_state.dart';
 import 'emergency_card_screen.dart';
@@ -43,8 +42,6 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
   late final Animation<double> _pulseAnimation;
   late final Animation<double> _floatAnimation;
   bool _showVaultBalancePreview = false;
-  BiometricFilterPolicy _biometricPolicy =
-      BiometricFilterPolicy.strongestPriority;
   int? _expandedFaqIndex;
 
   @override
@@ -78,7 +75,7 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
     _floatController.forward();
     _entranceController.forward();
 
-    // Auto-prompt Face ID / Biometrics if enabled on app return or lock
+    // Auto-prompt Fingerprint / Biometrics if enabled on app return or lock
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted &&
           widget.vaultState.userProfile.isBiometricEnabled &&
@@ -224,54 +221,30 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
   Future<void> _autoPromptBiometrics() async {
     if (_hasAutoPrompted || !mounted || widget.vaultState.isUnlocked) return;
     _hasAutoPrompted = true;
-    final bioResult = BiometricFilterService.resolveBiometrics(
-      policy: _biometricPolicy,
-      preferredType: widget.vaultState.userProfile.preferredBiometricType,
-    );
-    await _triggerBiometricAuth(bioResult);
+    await _triggerFingerprintDirect();
   }
 
-  Future<void> _triggerFaceIdAuth() async {
-    await FaceScannerDialog.show(
-      context,
-      vaultState: widget.vaultState,
-      onSuccess: () {
-        widget.vaultState.unlockVault();
-        widget.onSuccess();
-      },
-      onFallbackToPin: () => _openPinSheet(),
-      onFallbackToFingerprint: () async {
-        final result = await widget.vaultState.authenticateWithFingerprint();
-        if (result.isSuccess && mounted) {
-          widget.vaultState.unlockVault();
-          widget.onSuccess();
-        }
-      },
+  Future<void> _triggerFingerprintDirect() async {
+    final result = await widget.vaultState.authenticateWithFingerprint(
+      reason: 'Touch the fingerprint sensor to unlock LifeVault',
     );
-  }
-
-  Future<void> _triggerBiometricAuth(FilteredBiometricResult bioResult) async {
-    if (bioResult.primaryType == BiometricHardwareType.face ||
-        _biometricPolicy == BiometricFilterPolicy.faceOnly) {
-      await _triggerFaceIdAuth();
-      return;
-    }
-
-    bool bioAuthenticated = false;
-    await MasterAuthDialog.show(
-      context,
-      vaultState: widget.vaultState,
-      initialMode: AuthMode.biometric,
-      onSuccess: () {
-        bioAuthenticated = true;
-      },
-    );
-
     if (!mounted) return;
-
-    if (bioAuthenticated) {
+    if (result.isSuccess) {
       widget.vaultState.unlockVault();
       widget.onSuccess();
+    } else if (result.status != BiometricStatus.userCanceled) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.errorMessage ?? 'Fingerprint verification failed.'),
+            behavior: SnackBarBehavior.floating,
+            action: SnackBarAction(
+              label: 'Use PIN',
+              onPressed: () => _openPinSheet(),
+            ),
+          ),
+        );
+      }
     }
   }
 
@@ -433,9 +406,6 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
     final docCount = widget.vaultState.documents.length;
     final criticalCount = widget.vaultState.criticalAlertsCount;
     final secScore = widget.vaultState.securityScore;
-    final bioResult = BiometricFilterService.resolveBiometrics(
-      policy: _biometricPolicy,
-    );
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkCanvas : const Color(0xFFF3F4F6),
@@ -708,7 +678,7 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
                                 GestureDetector(
                                   key: const ValueKey(
                                       'landing_biometric_viewfinder'),
-                                  onTap: () => _triggerBiometricAuth(bioResult),
+                                  onTap: () => _triggerFingerprintDirect(),
                                   child: ScaleTransition(
                                     scale: _pulseAnimation,
                                     child: Container(
@@ -773,9 +743,9 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
                                               color: accent,
                                             ),
                                           ),
-                                          // Center Dynamic Filtered Biometric Icon
+                                          // Center Fingerprint Biometric Icon
                                           Icon(
-                                            bioResult.icon,
+                                            Icons.fingerprint_rounded,
                                             size: 56,
                                             color: accent,
                                           ),
@@ -788,7 +758,7 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
                                 const SizedBox(height: 14),
 
                                 Text(
-                                  'Login using ${bioResult.primaryType == BiometricHardwareType.face ? "Face ID" : "Fingerprint"} / Biometrics',
+                                  'Login using Fingerprint / Biometrics',
                                   style: TextStyle(
                                     fontSize: 13.5,
                                     fontWeight: FontWeight.w700,
@@ -797,65 +767,6 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
                                         : AppColors.ink,
                                   ),
                                 ),
-
-                                if (bioResult.isMultipleRegistered) ...[
-                                  const SizedBox(height: 6),
-                                  Wrap(
-                                    spacing: 8,
-                                    children: [
-                                      ChoiceChip(
-                                        label: const Text(
-                                          'Fingerprint',
-                                          style: TextStyle(fontSize: 11),
-                                        ),
-                                        selected:
-                                            _biometricPolicy ==
-                                                BiometricFilterPolicy
-                                                    .fingerprintOnly ||
-                                            _biometricPolicy ==
-                                                BiometricFilterPolicy
-                                                    .strongestPriority,
-                                        onSelected: (selected) {
-                                          if (selected) {
-                                            setState(() {
-                                              _biometricPolicy =
-                                                  BiometricFilterPolicy
-                                                      .fingerprintOnly;
-                                            });
-                                          }
-                                        },
-                                        avatar: const Icon(
-                                          Icons.fingerprint_rounded,
-                                          size: 14,
-                                        ),
-                                        visualDensity: VisualDensity.compact,
-                                      ),
-                                      ChoiceChip(
-                                        label: const Text(
-                                          'Face ID',
-                                          style: TextStyle(fontSize: 11),
-                                        ),
-                                        selected:
-                                            _biometricPolicy ==
-                                            BiometricFilterPolicy.faceOnly,
-                                        onSelected: (selected) {
-                                          if (selected) {
-                                            setState(() {
-                                              _biometricPolicy =
-                                                  BiometricFilterPolicy
-                                                      .faceOnly;
-                                            });
-                                          }
-                                        },
-                                        avatar: const Icon(
-                                          Icons.face_unlock_rounded,
-                                          size: 14,
-                                        ),
-                                        visualDensity: VisualDensity.compact,
-                                      ),
-                                    ],
-                                  ),
-                                ],
 
                                 const SizedBox(height: 6),
                                 // Secondary Alternate Login Options
@@ -1427,7 +1338,7 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
                               _buildFaqTile(
                                 index: 1,
                                 question: 'Can anyone read my data if my phone is stolen?',
-                                answer: 'No. Without your biometric authentication (Fingerprint / Face ID) or Master PIN, the encryption key cannot be derived from storage, making files unreadable gibberish.',
+                                answer: 'No. Without your biometric authentication (Fingerprint) or Master PIN, the encryption key cannot be derived from storage, making files unreadable gibberish.',
                                 isDark: isDark,
                                 accentColor: accent,
                               ),
@@ -1868,13 +1779,11 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
 class _BiometricAuthSheet extends StatefulWidget {
   const _BiometricAuthSheet({
     required this.vaultState,
-    required this.bioResult,
     required this.onAuthenticated,
     required this.onFallbackPin,
   });
 
   final VaultState vaultState;
-  final FilteredBiometricResult bioResult;
   final VoidCallback onAuthenticated;
   final VoidCallback onFallbackPin;
 
@@ -1899,11 +1808,8 @@ class _BiometricAuthSheetState extends State<_BiometricAuthSheet>
   }
 
   Future<void> _triggerRealBiometric() async {
-    final result = await widget.vaultState.biometricAuth.authenticate(
-      reason: 'Scan your biometric credential to unlock LifeVault',
-      requestedType: widget.bioResult.primaryType == BiometricHardwareType.face
-          ? 'Face ID'
-          : 'Fingerprint',
+    final result = await widget.vaultState.biometricAuth.authenticateWithFingerprint(
+      reason: 'Scan your fingerprint to unlock LifeVault',
     );
     if (!mounted) return;
     if (result.isSuccess) {
@@ -1924,9 +1830,6 @@ class _BiometricAuthSheetState extends State<_BiometricAuthSheet>
 
   @override
   Widget build(BuildContext context) {
-    final bioName = widget.bioResult.primaryType == BiometricHardwareType.face
-        ? 'Face ID'
-        : 'Fingerprint';
     final themeExt = AppTheme.of(context);
     final accent = themeExt.primaryAccent;
 
@@ -2025,7 +1928,7 @@ class _BiometricAuthSheetState extends State<_BiometricAuthSheet>
           const SizedBox(height: 28),
 
           Text(
-            _isSuccess ? 'Identity Verified' : 'Scan $bioName to authenticate',
+            _isSuccess ? 'Identity Verified' : 'Scan Fingerprint to authenticate',
             style: TextStyle(
               color: _isSuccess ? AppColors.mint : Colors.white70,
               fontSize: 13,
@@ -2036,7 +1939,7 @@ class _BiometricAuthSheetState extends State<_BiometricAuthSheet>
           Text(
             _isSuccess
                 ? 'Opening Vault...'
-                : widget.bioResult.sensorInstruction,
+                : 'Touch the fingerprint sensor to continue',
             style: TextStyle(
               color: _isSuccess ? AppColors.mint : Colors.white38,
               fontSize: 12,
@@ -2084,7 +1987,7 @@ class _BiometricAuthSheetState extends State<_BiometricAuthSheet>
                       child: Icon(
                         _isSuccess
                             ? Icons.check_circle_rounded
-                            : widget.bioResult.icon,
+                            : Icons.fingerprint_rounded,
                         size: 46,
                         color: _isSuccess ? AppColors.mint : Colors.white,
                       ),

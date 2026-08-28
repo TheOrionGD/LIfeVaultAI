@@ -231,32 +231,44 @@ class _EmergencyCardScreenState extends State<EmergencyCardScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: AppColors.coral.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(10),
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.coral.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(
+                                    Icons.location_on_rounded,
+                                    color: AppColors.coral,
+                                    size: 20,
+                                  ),
                                 ),
-                                child: const Icon(
-                                  Icons.location_on_rounded,
-                                  color: AppColors.coral,
-                                  size: 20,
+                                const SizedBox(width: 10),
+                                const Expanded(
+                                  child: Text(
+                                    'Last Known GPS Location',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 10),
-                              const Text(
-                                'Last Known GPS Location',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
+                          const SizedBox(width: 8),
                           FilledButton.tonalIcon(
                             onPressed: _isFetchingGps ? null : _fetchLiveGpsLocation,
+                            style: FilledButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
                             icon: _isFetchingGps
                                 ? const SizedBox(
                                     width: 14,
@@ -524,13 +536,18 @@ class _EmergencyCardScreenState extends State<EmergencyCardScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'Primary Emergency Contact (ICE)',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w900,
+                          const Expanded(
+                            child: Text(
+                              'Primary Emergency Contact (ICE)',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w900,
+                              ),
                             ),
                           ),
+                          const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 8,
@@ -573,12 +590,16 @@ class _EmergencyCardScreenState extends State<EmergencyCardScreen> {
                           profile.emergencyContactName.isNotEmpty
                               ? profile.emergencyContactName
                               : 'Emergency Contact Not Set',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontWeight: FontWeight.w900),
                         ),
                         subtitle: Text(
                           profile.emergencyContactPhone.isNotEmpty
                               ? profile.emergencyContactPhone
                               : 'Tap to configure in Settings',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -638,13 +659,18 @@ class _EmergencyCardScreenState extends State<EmergencyCardScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
-                              'Secondary Emergency Contact',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w900,
+                            const Expanded(
+                              child: Text(
+                                'Secondary Emergency Contact',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w900,
+                                ),
                               ),
                             ),
+                            const SizedBox(width: 8),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
@@ -684,9 +710,15 @@ class _EmergencyCardScreenState extends State<EmergencyCardScreen> {
                             profile.secondaryEmergencyContactName.isNotEmpty
                                 ? profile.secondaryEmergencyContactName
                                 : 'Secondary Contact',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(fontWeight: FontWeight.w800),
                           ),
-                          subtitle: Text(profile.secondaryEmergencyContactPhone),
+                          subtitle: Text(
+                            profile.secondaryEmergencyContactPhone,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
