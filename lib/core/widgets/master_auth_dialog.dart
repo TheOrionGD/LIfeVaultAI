@@ -137,10 +137,12 @@ class _MasterAuthDialogState extends State<MasterAuthDialog>
   Future<void> _loadBiometrics() async {
     try {
       final types = await widget.vaultState.biometricAuth.getEnrolledBiometricTypes();
+      final prefType = widget.vaultState.userProfile.preferredBiometricType;
       if (mounted) {
         setState(() {
           _enrolledTypes = types;
-          if (types.contains(BiometricType.face) && !types.contains(BiometricType.fingerprint)) {
+          if (prefType == 'face' ||
+              (types.contains(BiometricType.face) && !types.contains(BiometricType.fingerprint))) {
             _selectedBioType = 'face';
           }
         });

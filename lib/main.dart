@@ -113,8 +113,16 @@ class _LifeVaultRootState extends State<LifeVaultRoot> with WidgetsBindingObserv
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive ||
         state == AppLifecycleState.hidden) {
-      // App switched away or closed to background
-      _backgroundTimestamp = DateTime.now();
+      // App switched away or minimized to background
+      _backgroundTimestamp ??= DateTime.now();
+
+      // Amazon / Banking App Security Standard:
+      // If autoLockMinutes is 0 (Immediate), lock the vault the moment the user leaves the app
+      final autoLockMinutes = widget.vaultState.userProfile.autoLockMinutes;
+      if (autoLockMinutes == 0 && widget.vaultState.isUnlocked) {
+        debugPrint('[LifeVault Security] Amazon-style instant auto-lock triggered on background.');
+        widget.vaultState.lockVault();
+      }
     } else if (state == AppLifecycleState.resumed) {
       // User returns to app from background or another app
       if (_backgroundTimestamp != null) {
@@ -123,9 +131,7 @@ class _LifeVaultRootState extends State<LifeVaultRoot> with WidgetsBindingObserv
         final autoLockMinutes =
             widget.vaultState.userProfile.autoLockMinutes;
 
-        // Auto-lock condition:
-        // If set to Immediate (0 min) or grace threshold elapsed (e.g. >= autoLockMinutes * 60, or >= 3 seconds when set to immediate)
-        final thresholdSeconds = autoLockMinutes == 0 ? 1 : autoLockMinutes * 60;
+        final thresholdSeconds = autoLockMinutes * 60;
 
         if (elapsedSeconds >= thresholdSeconds) {
           if (widget.vaultState.isUnlocked) {

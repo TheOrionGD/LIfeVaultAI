@@ -58,6 +58,7 @@ class BiometricFilterService {
   static FilteredBiometricResult resolveBiometrics({
     List<BiometricHardwareType>? enrolled,
     BiometricFilterPolicy policy = BiometricFilterPolicy.strongestPriority,
+    String? preferredType,
   }) {
     final list = enrolled ??
         [
@@ -106,7 +107,11 @@ class BiometricFilterService {
 
     // Determine primary display type
     BiometricHardwareType primary;
-    if (filtered.contains(BiometricHardwareType.fingerprint)) {
+    if (preferredType == 'face' && filtered.contains(BiometricHardwareType.face)) {
+      primary = BiometricHardwareType.face;
+    } else if (preferredType == 'fingerprint' && filtered.contains(BiometricHardwareType.fingerprint)) {
+      primary = BiometricHardwareType.fingerprint;
+    } else if (filtered.contains(BiometricHardwareType.fingerprint)) {
       primary = BiometricHardwareType.fingerprint;
     } else if (filtered.contains(BiometricHardwareType.face)) {
       primary = BiometricHardwareType.face;

@@ -35,7 +35,7 @@ class LandingLoginScreen extends StatefulWidget {
 }
 
 class _LandingLoginScreenState extends State<LandingLoginScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late final AnimationController _pulseController;
   late final AnimationController _floatController;
   late final AnimationController _entranceController;
@@ -49,6 +49,7 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1600),
@@ -81,17 +82,43 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
       if (mounted &&
           widget.vaultState.userProfile.isBiometricEnabled &&
           !widget.vaultState.isUnlocked) {
-        _autoPromptBiometrics();
+        Future.delayed(const Duration(milliseconds: 250), () {
+          if (mounted &&
+              widget.vaultState.userProfile.isBiometricEnabled &&
+              !widget.vaultState.isUnlocked) {
+            _autoPromptBiometrics();
+          }
+        });
       }
     });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pulseController.dispose();
     _floatController.dispose();
     _entranceController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      if (mounted &&
+          widget.vaultState.userProfile.isBiometricEnabled &&
+          !widget.vaultState.isUnlocked) {
+        _hasAutoPrompted = false;
+        Future.delayed(const Duration(milliseconds: 250), () {
+          if (mounted &&
+              widget.vaultState.userProfile.isBiometricEnabled &&
+              !widget.vaultState.isUnlocked) {
+            _autoPromptBiometrics();
+          }
+        });
+      }
+    }
   }
 
   Animation<double> _getFade(double start, double end) {
@@ -198,6 +225,7 @@ class _LandingLoginScreenState extends State<LandingLoginScreen>
     _hasAutoPrompted = true;
     final bioResult = BiometricFilterService.resolveBiometrics(
       policy: _biometricPolicy,
+      preferredType: widget.vaultState.userProfile.preferredBiometricType,
     );
     await _triggerBiometricAuth(bioResult);
   }

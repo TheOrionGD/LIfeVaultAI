@@ -20,15 +20,15 @@ We are proud to present **LifeVault AI v5.2.4**, featuring enhanced cross-platfo
 
 | File | Type | Size | SHA-256 Checksum |
 | :--- | :--- | :--- | :--- |
-| **`LifeVault-v5.2.4-release.apk`** | Android Standalone Release APK | `~88.6 MB` (`92,891,339 bytes`) | `CD3DFD8E8CF0765523C6C5DA412A352C135E1F96053DAAD7F7CE623B1FB8992B` |
-| **`lifevault-release.apk`** | Android Standalone Release APK | `~88.6 MB` (`92,891,339 bytes`) | `CD3DFD8E8CF0765523C6C5DA412A352C135E1F96053DAAD7F7CE623B1FB8992B` |
+| **`LifeVault-v5.2.4-release.apk`** | Android Standalone Release APK | `~88.6 MB` (`92,895,435 bytes`) | `D1AC95243EE3F5C388C179987A1C457CA40D2F9B09CDC73DFD77EAD2FF3E46B4` |
+| **`lifevault-release.apk`** | Android Standalone Release APK | `~88.6 MB` (`92,895,435 bytes`) | `D1AC95243EE3F5C388C179987A1C457CA40D2F9B09CDC73DFD77EAD2FF3E46B4` |
 
 ### Checksum Verification
 
 **Windows (PowerShell):**
 ```powershell
 Get-FileHash -Path ".\LifeVault-v5.2.4-release.apk" -Algorithm SHA256
-# Expected: CD3DFD8E8CF0765523C6C5DA412A352C135E1F96053DAAD7F7CE623B1FB8992B
+# Expected: D1AC95243EE3F5C388C179987A1C457CA40D2F9B09CDC73DFD77EAD2FF3E46B4
 ```
 
 **Linux / macOS:**

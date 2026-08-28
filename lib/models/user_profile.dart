@@ -19,7 +19,7 @@ class UserProfile {
     this.isFingerprintRegistered = false,
     this.isFaceIdRegistered = false,
     this.preferredBiometricType = 'none',
-    this.autoLockMinutes = 5,
+    this.autoLockMinutes = 0,
     this.geminiApiKey = '',
     this.geminiModel = 'gemini-3.7-flash',
     this.mongoDbUri = '',
@@ -403,7 +403,7 @@ class UserProfile {
         isFaceIdRegistered: json['isFaceIdRegistered'] as bool? ?? false,
         preferredBiometricType:
             json['preferredBiometricType'] as String? ?? 'none',
-        autoLockMinutes: json['autoLockMinutes'] as int? ?? 5,
+        autoLockMinutes: json['autoLockMinutes'] as int? ?? 0,
         geminiApiKey: json['geminiApiKey'] as String? ?? '',
         geminiModel: (json['geminiModel'] == null ||
                 (json['geminiModel'] as String).contains('1.5'))

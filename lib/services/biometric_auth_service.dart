@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
+import 'package:local_auth_android/local_auth_android.dart';
+import 'package:local_auth_darwin/local_auth_darwin.dart';
 import 'windows_hello_stub.dart'
     if (dart.library.html) 'windows_hello_web.dart';
 
@@ -81,12 +83,13 @@ class BiometricAuthService {
 
   /// Explicit Face ID / Windows Hello Face authentication request
   Future<BiometricAuthResult> authenticateWithFaceId({
-    String reason = 'Look at your camera to unlock LifeVault with Face ID / Windows Hello',
+    String reason = 'Look directly at your camera to unlock LifeVault with Face ID / Windows Hello',
   }) async {
     return authenticate(
       reason: reason,
-      biometricOnly: true,
+      biometricOnly: false,
       requestedType: 'Face ID / Windows Hello',
+      isFaceExplicit: true,
     );
   }
 
@@ -96,8 +99,9 @@ class BiometricAuthService {
   }) async {
     return authenticate(
       reason: reason,
-      biometricOnly: true,
+      biometricOnly: false,
       requestedType: 'Fingerprint',
+      isFaceExplicit: false,
     );
   }
 
@@ -106,6 +110,7 @@ class BiometricAuthService {
     String reason = 'Verify your Windows Hello, Face ID or Fingerprint to unlock LifeVault',
     bool biometricOnly = false,
     String? requestedType,
+    bool isFaceExplicit = false,
     bool forceSimulated = false,
   }) async {
     final bool isFlutterTest = !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
@@ -150,13 +155,35 @@ class BiometricAuthService {
 
       bool didAuthenticate = false;
       try {
+        final authMessages = <AuthMessages>[
+          AndroidAuthMessages(
+            signInTitle: isFaceExplicit ? 'Face ID Unlock' : 'Biometric Security Unlock',
+            biometricHint: isFaceExplicit
+                ? 'Look directly at your front camera to verify identity'
+                : 'Verify using Face Unlock or Fingerprint sensor',
+            biometricNotRecognized: isFaceExplicit
+                ? 'Face not recognized. Look directly at camera or use PIN.'
+                : 'Biometric identity not recognized. Please try again.',
+            biometricSuccess: 'Identity verified successfully',
+            cancelButton: 'Use Master PIN / Cancel',
+            deviceCredentialsRequiredTitle: 'Authentication Required',
+            deviceCredentialsSetupDescription:
+                'Please configure biometrics or security credentials in device settings.',
+          ),
+          const IOSAuthMessages(
+            localizedFallbackTitle: 'Enter Master PIN',
+            cancelButton: 'Cancel',
+          ),
+        ];
+
         didAuthenticate = await _auth.authenticate(
           localizedReason: reason,
-          options: AuthenticationOptions(
-            biometricOnly: biometricOnly,
+          authMessages: authMessages,
+          options: const AuthenticationOptions(
+            biometricOnly: false,
             stickyAuth: true,
             useErrorDialogs: true,
-            sensitiveTransaction: true,
+            sensitiveTransaction: false,
           ),
         );
       } on PlatformException catch (pe) {
